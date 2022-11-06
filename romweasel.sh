@@ -2,7 +2,7 @@
 
 setopt localoptions extendedglob
 
-TITLE="MiSTer ROMweasel v0.9.1"
+WEASEL_VERSION="MiSTer ROMweasel v0.9.2"
 
 # Required software to run
 XMLLINT=$(which xmllint) || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -167,7 +167,7 @@ get_config () {
     : ${PSXMISC_GAMEDIR=/media/fat/games/PSX}
 
     # Simplified mode for use without a keyboard
-    : ${JOY_MODE=0}
+    : ${JOY_MODE=true}
 
     if [[ -f ${SETTINGS_SH} ]]; then
         # Load user configuration file
@@ -179,7 +179,7 @@ get_config () {
         for (( i=1; i<${#SUPPORTED_CORES}; i+=2 )) ; do
             tmpl+="#${SUPPORTED_CORES[i]}_GAMEDIR=\"${(P)${:-${SUPPORTED_CORES[i]}_GAMEDIR}}\""
         done
-        tmpl+="\n# Simplified mode for use without a keyboard (0=off, 1=on)"
+        tmpl+="\n# Simplified mode for use without a keyboard (true/false)"
         tmpl+="#JOY_MODE=${JOY_MODE}"
         print -l $tmpl > ${SETTINGS_SH}
     fi
@@ -370,20 +370,21 @@ download_roms () {
 
         # If the file is compressed, extract it, otherwise just move to destination
         if [[ -z ${tag##*.7z} ]]; then
-            ${SZR} e "$ofile" -o"$dest"
+            $JOY_MODE && clobber="-y" || unset clobber
+            ${SZR} e "$ofile" -o"$dest" $clobber
             rm "$ofile"
         else
             mv "$ofile" "$dest"
         fi
     done
 
-    ${DIALOG} --title ${TITLE} --cr-wrap --msgbox "Download complete!\n\nPress OK to return." \
+    ${DIALOG} --title ${WEASEL_VERSION} --cr-wrap --msgbox "Download complete!\n\nPress OK to return." \
         12 32 2>${DIALOG_TEMPFILE}
     [[ $? -ne $DIALOG_OK ]] && cleanup
 }
 
 game_menu () {
-    unset filter
+    : ${selected_tags=0} ; unset filter
     while true; do
         # Optional filter string for narrowing down the game list
         if [[ -n $filter ]]; then
@@ -413,6 +414,7 @@ game_menu () {
         for (( i=1 ; i<=${#menu_tags}; ++i )) ; do
             # Restore selected items, if any
             (( ${selected_tags[(Ie)${menu_tags[$i]}]} )) && st="On" || st="0"
+            $JOY_MODE && unset st
             menu_items+=(${menu_tags[$i]} ${${${menu_tags[$i]##*/}%.(7z|chd)}:0:$itemwidth} $st)
         done
 
@@ -425,13 +427,19 @@ game_menu () {
 
         ###############
         # Main ROM menu
-        ${DIALOG} --clear --title ${TITLE} --separate-output --extra-button --extra-label "ROM info" \
-            --no-tags --cancel-label "Back" --help-button --help-tags --help-label "Filter..." \
-            --ok-label "Download" \
-            --checklist "Choose game(s) to download (core: ${CORE}, games total: ${#menu_tags})" \
-            $MAXHEIGHT $MAXWIDTH ${#menu_tags} ${menu_items} 2>${DIALOG_TEMPFILE}
+        if $JOY_MODE; then
+            ${DIALOG} --clear --title ${TITLE} --extra-button --extra-label "ROM info" \
+                --no-tags --cancel-label "Back" --ok-label "Download" --default-item "${selected_tags}"\
+                --menu "Choose game to download (core: ${CORE}, games total: ${#menu_tags})" \
+                $MAXHEIGHT $MAXWIDTH ${#menu_tags} ${menu_items} 2>${DIALOG_TEMPFILE}
+        else
+            ${DIALOG} --clear --title ${TITLE} --separate-output --extra-button --extra-label "ROM info" \
+                --no-tags --cancel-label "Back" --help-button --help-tags --help-label "Filter..." \
+                --ok-label "Download" --default-item "${selected_tags[1]}" \
+                --checklist "Choose game(s) to download (core: ${CORE}, games total: ${#menu_tags})" \
+                $MAXHEIGHT $MAXWIDTH ${#menu_tags} ${menu_items} 2>${DIALOG_TEMPFILE}
+        fi
         retval=$?
-
         # List of user selected tags
         selected_tags=(${${(f)"$(<${DIALOG_TEMPFILE})"}/&amp\;/&})
 
@@ -439,7 +447,7 @@ game_menu () {
             # Download selected games
             $DIALOG_OK)
                 download_roms ${selected_tags}
-                unset selected_tags filter
+                $JOY_MODE || unset selected_tags filter
                 continue ;;
 
             # Help button is for filtering the ROM list
@@ -493,11 +501,18 @@ fetch_metadata
 ###########
 # Main loop
 while true; do
+    # Restore menu position, if any
+    default_item=${CORE:-0}
+
+    # Set special title for simple mode
+    $JOY_MODE && jm=" (Simple Mode)" || unset jm
+    TITLE="${WEASEL_VERSION}${jm}"
 
     # Show main ROM repository menu
-    ${DIALOG} --title ${TITLE} --cancel-label "Quit" --help-button --help-tags \
-        --extra-button --extra-label "Info" \
-        --menu "Choose target system/repository:" 0 0 0 ${SUPPORTED_CORES} 2>${DIALOG_TEMPFILE}
+    $JOY_MODE && jm="Normal Mode" || jm="Simple Mode"
+    ${DIALOG} --title ${TITLE} --cancel-label "Quit" --help-button --help-tags --help-status \
+        --default-item "$default_item" --extra-button --extra-label "Info" --help-label $jm \
+        --menu "Choose target system/repository:" 0 80 0 ${SUPPORTED_CORES} 2>${DIALOG_TEMPFILE}
     retval=$?
 
     case $retval in
@@ -506,18 +521,23 @@ while true; do
             select_core $(<$DIALOG_TEMPFILE)
             game_menu ;;
 
-        # Show user documentation (XXX: once it exists)
-        $DIALOG_HELP) : ;;
+        # Repurposed for toggling simplified joystick mode on and off
+        $DIALOG_HELP)
+            select_core ${(@f)$(<$DIALOG_TEMPFILE)[2]}
+            $JOY_MODE && { JOY_MODE=false ; jm='\Z6Disabled!\Zn' } || { JOY_MODE=true ; jm='\Z5Enabled!\Zn' }
+            ${DIALOG} --title ${TITLE} --cr-wrap --colors --msgbox "Simplified joystick mode:\n\n$jm" \
+                8 0 2>${DIALOG_TEMPFILE}
+            [[ $? -ne $DIALOG_OK ]] && cleanup
+            ;;
 
         # Show information for currently selected ROM repository
         $DIALOG_EXTRA)
-            core=$(<${DIALOG_TEMPFILE})
-            select_core ${core}
+            select_core $(<${DIALOG_TEMPFILE})
             t=$(${XMLLINT} ${META_XML} --xpath "string(metadata/title)")
             d=$(${XMLLINT} ${META_XML} --xpath "string(metadata/addeddate)")
             ${DIALOG} --title "ROM repository info" --msgbox "\
-Core:  ${core} \n\
-URL:   ${(P)${:-${core}_URL}} \n\
+Core:  ${CORE} \n\
+URL:   ${CORE_URL}} \n\
 Title: ${t} \n\
 Added: ${d}" 10 $MAXWIDTH
             ;;
