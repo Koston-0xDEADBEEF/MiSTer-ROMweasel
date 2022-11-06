@@ -2,7 +2,7 @@
 
 setopt localoptions extendedglob
 
-TITLE="MiSTer ROMweasel v0.9"
+TITLE="MiSTer ROMweasel v0.9.1"
 
 # Required software to run
 XMLLINT=$(which xmllint) || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -109,7 +109,7 @@ SIG_KILL=9
 SIG_TERM=15
 
 # Fixes ncurses output with many terminals (eg. PuTTY)
-NCURSES_NO_UTF8_ACS=1
+export NCURSES_NO_UTF8_ACS=1
 
 # dialog(1) writes results to a tempfile via stderr
 DIALOG_TEMPFILE=$(mktemp 2>/dev/null) || DIALOG_TEMPFILE=/tmp/test$$
@@ -209,7 +209,7 @@ fetch_metadata () {
         ${DIALOG} --title ${TITLE} \
             --gauge "Downloading ROM repository metadata XML files (total: $((${#SUPPORTED_CORES}/2)))" \
             16 $(($MAXWIDTH / 2)) 0
-    
+
     [[ $? -ne $DIALOG_OK ]] && cleanup
     touch $DLDONE
 }
@@ -218,7 +218,7 @@ fetch_metadata () {
 select_core () {
     CORE=${1}
     CORE_URL=${(P)${:-${CORE}_URL}}
-    DEST_GAMEDIR=${(P)${:-${CORE}_GAMEDIR}}
+    CORE_GAMEDIR=${(P)${:-${CORE}_GAMEDIR}}
     FILES_XML=${(P)${:-${CORE}_FILES_XML}}
     META_XML=${(P)${:-${CORE}_META_XML}}
 }
@@ -229,23 +229,96 @@ get_rom_info () {
     rominfo="" ; totalsize=0
     for tag in $tags; do
         romsize=$(get_tag_filesize "$tag")
-        : $(( totalsize+=$romsize ))
+        # MiSTer Zsh is compiled with only 4-byte integers, so shell
+        # arithmetic is unfit to keep count of total size
+        totalsize=$(print "$totalsize + $romsize" | bc)
         file_name="$(get_tag_filename "$tag")"
         rominfo+="File name: ${file_name##*/}\n"
         rominfo+="File URL:  ${CORE_URL}/$(urlencode ${file_name})\n"
         rominfo+="File size: $(humanise $romsize)\n"
+        dest="$(get_rom_gamedir "$tag")"
+        if [[ $? -ne 0 ]]; then
+            rominfo+="\\\Zb\\\ZrSave path\\\Zn: \\\Z4${dest}\\\Zn\n\n"
+        else rominfo+="Save path: ${dest}\n\n"
+        fi
+
     done
     rominfo+="\nTotal size: $(humanise $totalsize)\n"
     print $rominfo
+}
+
+# Get destination directory path for a given tag
+get_rom_gamedir () {
+    tag=$*
+    # For compressed files, it's always just the core main ROM directory
+    [[ -z ${tag##*.7z} ]] && { print "${CORE_GAMEDIR}/" ; return }
+
+    # All CD based system games should have their own subdirectories, for
+    # detecting if CD change warrants a core reset (multi-CD games), and a
+    # least for PSX core to automatically create a matching save file (mcd)
+    #
+    # Because file naming in the repositories isn't quite uniform, it's a bit
+    # of a pain in the ass. Some multi-CD titles have multiple versions and
+    # each disk additionally has a unique name.
+    #
+    # For deducing correct directory name for multi-CD games, filename is cut
+    # into three parts:
+    #
+    #   `Example Multi-CD Game (Disc 1) (Ugly hack) (Proto)`
+    #    +-------------------+ +------+ +-----------------+
+    #            base            disc         suffix
+
+    # Strip prefix subdir and file extension
+    tag=${${(Q)tag%.chd}##*/}
+    # MegaCD has additional region specific subdirectories
+    if [[ $CORE = "MCD" ]]; then
+        : ${tag/(#b)\((Europe|Japan|USA)\)}
+        print -n "${CORE_GAMEDIR}/${match}/"
+    else print -n "${CORE_GAMEDIR}/"
+    fi
+    # If this isn't a multi-CD game, just use the game base name
+    base=${tag//(#b)( \(Disc [0-9AB]\))(*)/}
+    (( $#match < 2 )) && { print "${base}/" ; return }
+
+    # Search XML again for rest of the discs matching same game basename
+    suff="${match[2]}"
+    typeset -A discset=() # discset[base]="disc:suffix\x00disc:suffix\x00"
+    filter="$base"
+    tmpdata=$(${XMLLINT} ${FILES_XML} --xpath "files/file[sha1][contains(translate(\
+        @name, \"${(U)filter}\", \"${(L)filter}\"), \"${(L)filter}\")]/@name")
+
+    tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.chd}/\&amp\;/&})
+    for tag in $tags; do
+        tag=${${(Q)tag%.chd}##*/}
+        nbase=${tag//(#b)( \(Disc [0-9AB]\))(*)/}
+        (( $#match < 2 )) || [[ ! $nbase = $base ]] && continue
+        discset[${base}]+=${:-${match[1]}":"${match[2]}$'\x00'}
+    done
+
+    # If there's only one file suffix, use it
+    nsuff=(${(u)${(0)discset[$base]}##*:})
+    (( ${#nsuff} == 1 )) && { print "${base}${nsuff}/" ; return }
+
+    # If there's multiple suffixes but only one set of discs, just use base name
+    discs=(${${(0)discset[$base]}%%:*})
+    (( ${#discs} == ${#${(@u)discs}} )) && { print "${base}/" ; return }
+
+    # If the number of disc sets matches the number of different suffixes,
+    # *assume* there's a unique suffix per set
+    dsets=$(( ${#discs} / ${#${(@u)discs}} ))
+    (( $dsets == ${#nsuff} )) && { print "${base}${suff}/" ; return }
+
+    # This is as far as I'm willing to go with programmatical heuristics
+    print ; return 1
 }
 
 # Download selected ROMs
 download_roms () {
     tags=(${*})
     rominfo="$(get_rom_info $tags)"
-    rominfo+="\nDownload the selected game(s) to \"${DEST_GAMEDIR}\" ?\n"
-    
-    ${DIALOG} --title "Information for selected ROM(s)" --clear --cr-wrap \
+    rominfo+="\nDownload selected game(s)?\n"
+
+    ${DIALOG} --title "Information for selected ROM(s)" --clear --cr-wrap --colors \
         --yesno "$rominfo" $(( $MAXHEIGHT / 2 )) $MAXWIDTH 2>${DIALOG_TEMPFILE}
     retval=$?
     [[ $retval -eq $DIALOG_CANCEL ]] && return
@@ -255,17 +328,21 @@ download_roms () {
     curl_opts=(--connect-timeout 5 --retry 3 --retry-delay 5 -C - -kL)
 
     # Make sure target directory exists or if user wants it to be created
-    if [[ ! -d $DEST_GAMEDIR ]]; then
+    if [[ ! -d $CORE_GAMEDIR ]]; then
         ${DIALOG} --title "Warning" --clear --cr-wrap --yesno \
-            "Directory \"${DEST_GAMEDIR}\" doesn't exist.\n\nCreate it?" \
+            "Directory \"${CORE_GAMEDIR}\" doesn't exist.\n\nCreate it?" \
             10 82 2>${DIALOG_TEMPFILE}
         retval=$?
         [[ $retval -eq $DIALOG_CANCEL ]] && return
         [[ $retval -ne $DIALOG_OK ]] && cleanup
-        mkdir -p $DEST_GAMEDIR
+        mkdir -p $CORE_GAMEDIR
     fi
 
     for tag in $tags; do
+        # Confirm final destination directory
+        dest=$(get_rom_gamedir $tag)
+        [[ -n $dest ]] && { [[ -d $dest ]] || mkdir -p "$dest" }
+
         # Encoded URL to fetch from
         url="${CORE_URL}/$(urlencode "$(get_tag_filename "$tag")")"
         # Destination file with full path
@@ -287,10 +364,10 @@ download_roms () {
 
         # If the file is compressed, extract it, otherwise just move to destination
         if [[ -z ${tag##*.7z} ]]; then
-            ${SZR} e "$ofile" -o"${DEST_GAMEDIR}"
+            ${SZR} e "$ofile" -o"$dest"
             rm "$ofile"
         else
-            mv "$ofile" "${DEST_GAMEDIR}"
+            mv "$ofile" "$dest"
         fi
     done
 
@@ -300,6 +377,7 @@ download_roms () {
 }
 
 game_menu () {
+    unset filter
     while true; do
         # Optional filter string for narrowing down the game list
         if [[ -n $filter ]]; then
@@ -322,7 +400,7 @@ game_menu () {
         # - Restore &amp; encoded ampersand to '&'
         menu_tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.(7z|chd)}/\&amp\;/&})
         menu_items=()
-    
+
         # Due to cdialog bug, checklist doesn't wrap correctly.
         # For display, remove any prefix subdirectories and file extension, then trim length if needed.
         itemwidth=$(( $MAXWIDTH - 14 ))
@@ -349,7 +427,7 @@ game_menu () {
         retval=$?
 
         # List of user selected tags
-        selected_tags=(${${(f)"$(<${DIALOG_TEMPFILE})"}/&amp\;/&}) 
+        selected_tags=(${${(f)"$(<${DIALOG_TEMPFILE})"}/&amp\;/&})
 
         case $retval in
             # Download selected games
@@ -372,7 +450,7 @@ game_menu () {
             # Show some data for selected ROM(s)
             $DIALOG_EXTRA)
                 rominfo="$(get_rom_info $selected_tags)"
-                ${DIALOG} --title "Information for selected ROM(s)" --clear --cr-wrap \
+                ${DIALOG} --title "Information for selected ROM(s)" --clear --cr-wrap --colors \
                     --msgbox "$rominfo" $(( $MAXHEIGHT / 2 )) $MAXWIDTH 2>${DIALOG_TEMPFILE}
                 [[ $? -ne $DIALOG_OK ]] && cleanup
                 continue ;;
