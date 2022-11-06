@@ -148,19 +148,7 @@ cleanup () {
 }
 
 get_config () {
-    if [[ ! -f ${SETTINGS_SH} ]]; then
-        # If configuration file doesn't exist, create one from scratch
-        tmpl=("# automatically generated romweasel configuration template")
-        for (( i=1; i<${#SUPPORTED_CORES}; i+=2 )) ; do
-            tmpl+="#${SUPPORTED_CORES[i]}_GAMEDIR=\"\""
-        done
-        print -l $tmpl > ${SETTINGS_SH}
-    fi
-
-    # Load user configuration file
-    . ${SETTINGS_SH}
-
-    # Set configuration default values for any that weren't set in user config
+    # Default settings
     : ${NES_GAMEDIR=/media/fat/games/NES}
     : ${SNES_GAMEDIR=/media/fat/games/SNES}
     : ${GB_GAMEDIR=/media/fat/games/GAMEBOY}
@@ -177,6 +165,24 @@ get_config () {
     : ${PSXJP_GAMEDIR=/media/fat/games/PSX}
     : ${PSXJP2_GAMEDIR=/media/fat/games/PSX}
     : ${PSXMISC_GAMEDIR=/media/fat/games/PSX}
+
+    # Simplified mode for use without a keyboard
+    : ${JOY_MODE=0}
+
+    if [[ -f ${SETTINGS_SH} ]]; then
+        # Load user configuration file
+        . ${SETTINGS_SH}
+    else
+        # If configuration file doesn't exist, create one from scratch
+        tmpl=("# Automatically generated romweasel configuration template\n")
+        tmpl+="# Root directories per core / ROM repository"
+        for (( i=1; i<${#SUPPORTED_CORES}; i+=2 )) ; do
+            tmpl+="#${SUPPORTED_CORES[i]}_GAMEDIR=\"${(P)${:-${SUPPORTED_CORES[i]}_GAMEDIR}}\""
+        done
+        tmpl+="\n# Simplified mode for use without a keyboard (0=off, 1=on)"
+        tmpl+="#JOY_MODE=${JOY_MODE}"
+        print -l $tmpl > ${SETTINGS_SH}
+    fi
 }
 
 # Download XML files containing all ROM metadata
