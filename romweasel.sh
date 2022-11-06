@@ -168,8 +168,8 @@ get_config () {
     : ${GBA_GAMEDIR=/media/fat/games/GBA}
     : ${TG16_GAMEDIR=/media/fat/games/TGFX16}
     : ${TG16CD_GAMEDIR=/media/fat/games/TGFX16-CD}
-    : ${SMS_GAMEDIR=/media/fat/games/SMS/Master System}
-    : ${GG_GAMEDIR=/media/fat/games/SMS/Game Gear}
+    : ${SMS_GAMEDIR=/media/fat/games/SMS}
+    : ${GG_GAMEDIR=/media/fat/games/SMS}
     : ${MD_GAMEDIR=/media/fat/games/Genesis}
     : ${MCD_GAMEDIR=/media/fat/games/MegaCD}
     : ${PSXUS_GAMEDIR=/media/fat/games/PSX}
