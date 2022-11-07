@@ -1,11 +1,11 @@
 #!/bin/zsh
 
 # Script sets its own options and restores caller options on exit
-setopt localoptions extendedglob pipefail
+setopt localoptions extendedglob pipefail warnnestedvar nullglob
 
 # Initialise all readonly global variables
 init_static_globals () {
-    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.2"
+    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.3"
 
     # Required software to run
     typeset -gr XMLLINT=$(which xmllint)    || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -121,7 +121,8 @@ init_static_globals () {
     typeset -gr SIG_TERM=15
 }
 
-set_gamedirs () {
+# User configurable options
+set_conf_opts () {
     typeset -gr NES_GAMEDIR=${NES_GAMEDIR:-/media/fat/games/NES}
     typeset -gr SNES_GAMEDIR=${SNES_GAMEDIR:-/media/fat/games/SNES}
     typeset -gr GB_GAMEDIR=${GB_GAMEDIR:-/media/fat/games/GAMEBOY}
@@ -138,30 +139,31 @@ set_gamedirs () {
     typeset -gr PSXJP_GAMEDIR=${PSXJP_GAMEDIR:-/media/fat/games/PSX}
     typeset -gr PSXJP2_GAMEDIR=${PSXJP2_GAMEDIR:-/media/fat/games/PSX}
     typeset -gr PSXMISC_GAMEDIR=${PSXMISC_GAMEDIR:-/media/fat/games/PSX}
+    # Simplified mode for use without a keyboard (true/false toggle)
+    typeset -g JOY_MODE=${JOY_MODE:-true}
 }
 
 # Dynamically set environment variables to point to currently selected repository
 select_core () {
-    CORE=${1}
-    CORE_URL=${(P)${:-${CORE}_URL}}
-    CORE_GAMEDIR=${(P)${:-${CORE}_GAMEDIR}}
-    CORE_FILES_XML=${(P)${:-${CORE}_FILES_XML}}
-    CORE_META_XML=${(P)${:-${CORE}_META_XML}}
+    typeset -g CORE=${1}
+    typeset -g CORE_URL=${(P)${:-${CORE}_URL}}
+    typeset -g CORE_GAMEDIR=${(P)${:-${CORE}_GAMEDIR}}
+    typeset -g CORE_FILES_XML=${(P)${:-${CORE}_FILES_XML}}
+    typeset -g CORE_META_XML=${(P)${:-${CORE}_META_XML}}
 }
 
 get_config () {
-    typeset -g JOY_MODE=true # Simplified mode for use without a keyboard (true/false toggle)
     typeset -g TITLE=${ROMWEASEL_VERSION}
 
     if [[ -f ${SETTINGS_SH} ]]; then
-        t=$(source ${SETTINGS_SH} 2>&1) # XXX: Don't want this stderr in parent tty
+        t=$(source ${SETTINGS_SH} 2>&1)
         [[ -n $t ]] && { print "Error parsing user configuration file: $t" ; cleanup }
         source ${SETTINGS_SH}
-        set_gamedirs ; return
+        set_conf_opts ; return
     fi
 
     # If configuration ddfile doesn't exist, create one from scratch
-    set_gamedirs
+    set_conf_opts
     tmpl=("# Automatically generated romweasel configuration template\n")
     tmpl+="# Root directories per core / ROM repository"
     for (( i=1; i<${#SUPPORTED_CORES}; i+=2 )) ; do
@@ -239,13 +241,12 @@ fetch_metadata () {
     unset curl_opts i
 }
 
-
 # Display information for selected ROMs
 get_rom_info () {
     local -a tags=($*)
-    local rominfo="" totalsize=0 tag dest
+    local rominfo="" totalsize=0 romsize file_name tag dest
     for tag in $tags; do
-        local romsize=$(get_tag_filesize "$tag")
+        romsize=$(get_tag_filesize "$tag")
         # MiSTer Zsh is compiled with only 4-byte integers, so shell
         # arithmetic is unfit to keep count of the total size
         totalsize=$(print "$totalsize + $romsize" | ${BC})
@@ -267,66 +268,38 @@ get_rom_info () {
 # Get destination directory path for a given tag
 get_rom_gamedir () {
     local tag=$*
-    # For compressed files, it's always just the core main ROM directory
-    [[ -z ${tag##*.7z} ]] && { print "${CORE_GAMEDIR}/" ; return }
+    local odir="${CORE_GAMEDIR}/"
+    local match mbegin mend # Set by backreference glob (#b)
 
-    # All CD based system games should have their own subdirectories, for
-    # detecting if CD change warrants a core reset (multi-CD games), and a
-    # least for PSX core to automatically create a matching save file (mcd)
-    #
-    # Because file naming in the repositories isn't quite uniform, it's a bit
-    # of a pain in the ass. Some multi-CD titles have multiple versions and
-    # each disk additionally has a unique name.
-    #
-    # For deducing correct directory name for multi-CD games, filename is cut
-    # into three parts:
-    #
-    #   `Example Multi-CD Game (Disc 1) (Ugly hack) (Proto)`
-    #    +-------------------+ +------+ +-----------------+
-    #            base            disc         suffix
+    # For compressed files, it's always just the core main ROM directory
+    [[ -z ${tag##*.7z} ]] && { print "$odir" ; return }
 
     # Strip prefix subdir and file extension
     tag=${${(Q)tag%.chd}##*/}
+
     # MegaCD has additional region specific subdirectories
     if [[ $CORE = "MCD" ]]; then
         : ${tag/(#b)\((Europe|Japan|USA)\)}
-        print -n "${CORE_GAMEDIR}/${match}/"
-    else print -n "${CORE_GAMEDIR}/"
+        # If we can't deduce region, well just skip it
+        [[ -z $match ]] || odir+="${match}/"
     fi
-    # If this isn't a multi-CD game, just use the game base name
-    local base=${tag//(#b)( \(Disc [0-9AB]\))(*)/}
-    (( $#match < 2 )) && { print "${base}/" ; return }
 
-    # Search XML again for rest of the discs matching same game basename
-    local suff="${match[2]}"
-    typeset -A discset=() # discset[base]="disc:suffix\x00disc:suffix\x00"
+    # If this isn't a multi-CD game, just use the game base name
+    local base="${tag% \(Disc [0-9AB]\)*}"
+    (( $#base == $#tag )) && { print "${odir}${base}/" ; return }
+
+    # Search XML for games with same base name
     local filter="$base"
     tmpdata=$($XMLLINT $CORE_FILES_XML --xpath "files/file[sha1][contains(translate(\
         @name, \"${(U)filter}\", \"${(L)filter}\"), \"${(L)filter}\")]/@name")
 
-    local -a tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.chd}//\&amp\;/&}) ; unset tmpdata
-    for tag in $tags; do
-        tag=${${(Q)tag%.chd}##*/}
-        local nbase=${tag//(#b)( \(Disc [0-9AB]\))(*)/}
-        (( $#match < 2 )) || [[ ! $nbase = $base ]] && continue
-        discset[${base}]+=${:-${match[1]}":"${match[2]}$'\x00'}
-    done
+    local -a ntags=(${${${${${${(@f)tmpdata}#*\"}%\"*}##*/}:#^*.chd}//\&amp\;/&})
+    unset tmpdata ; local nbase
+    nbase=$(find_basename "$tag" $ntags)
+    if [[ $? -eq 0 ]] && { print "${odir}${nbase}/" ; return }
 
-    # If there's only one file suffix, use it
-    local -a nsuff=(${(u)${(0)discset[$base]}##*:})
-    (( ${#nsuff} == 1 )) && { print "${base}${nsuff}/" ; return }
-
-    # If there's multiple suffixes but only one set of discs, just use base name
-    local -a discs=(${${(0)discset[$base]}%%:*})
-    (( ${#discs} == ${#${(@u)discs}} )) && { print "${base}/" ; return }
-
-    # If the number of disc sets matches the number of different suffixes,
-    # *assume* there's a unique suffix per set
-    local dsets=$(( ${#discs} / ${#${(@u)discs}} ))
-    (( $dsets == $#nsuff )) && { print "${base}${suff}/" ; return }
-
-    # This is as far as I'm willing to go with programmatical heuristics
-    print ; return 1
+    # Failure
+    print $odir ; return 1
 }
 
 # Download selected ROMs
@@ -394,10 +367,88 @@ download_roms () {
     [[ $? -ne $DIALOG_OK ]] && cleanup
 }
 
+# Organise ROM files in directory $* as we would when downloading
+organise_chd_dir () {
+    local gamedir="${*%/}"
+    local tag base nbase
+    [[ -d $gamedir ]] || { print "ERROR: $gamedir is not a directory?" ; return 1 }
+
+    local -a tags=(${gamedir}/*.chd)
+    for (( i=1; i <= $#tags; i++ )) ; do
+        tag="${${(Q)tags[i]%.chd}##*/}"
+        base="${tag% \(Disc [0-9AB]\)*}"
+        if (( $#base == $#tag )); then # Not multi-CD game
+            print "\e[33m${tags[i]##*/}\e[0m -> \e[34m${base}\e[0m/"
+            [[ -d "${gamedir}/${base}" ]] || mkdir "${gamedir}/${base}"
+            mv "${tags[i]}" "${gamedir}/${base}"
+            continue
+        fi
+
+        # Find other files with same basename and send off to neural network quantum AI
+        local -a ntags=(${gamedir}/${base}*.chd)
+        nbase=$(find_basename "$tag" $ntags)
+        if [[ $? -eq 0 ]]; then
+            print "\e[33m${${tags[i]}##*/}\e[0m -> \e[36m${nbase}\e[0m/"
+            [[ -d "${gamedir}/${nbase}" ]] || mkdir "${gamedir}/${nbase}"
+            mv "${tags[i]}" "${gamedir}/${nbase}"
+        else
+            print "\e[35m${${tags[i]}##*/}\e[0m -> \e[31mFAILED TO COMPUTE SUITABLE NAME\e[0m"
+        fi
+    done
+}
+
+# Find suitable game directory name when multiple base names are identical
+find_basename () {
+    local tag=${(Q)1##*/}
+    local -a ntags=(${(Q)@[2,-1]##*/})
+    local ntag match mbegin mend # Set by backreference glob (#b)
+    local base=${tag//(#b) \(Disc [0-9AB]\)(*)/}
+    local suff="${match}"
+
+    # All CD based system games should have their own subdirectories, for
+    # detecting if CD change warrants a core reset (multi-CD games), and a
+    # least for PSX core to automatically create a matching save file (mcd)
+    #
+    # Because file naming in the repositories isn't quite uniform, it's a bit
+    # of a pain in the ass. Some multi-CD titles have multiple versions and
+    # each disk additionally has a unique name.
+    #
+    # For deducing correct directory name for multi-CD games, filename is cut
+    # into three parts:
+    #
+    #   `Example Multi-CD Game (Disc 1) (Ugly hack) (Proto)`
+    #    +-------------------+ +------+ +-----------------+
+    #            base            disc         suffix
+
+    typeset -A discset=() # discset[base]="disc:suffix\x00disc:suffix\x00"
+    for ntag in $ntags; do
+        local nbase=${ntag//(#b)( \(Disc [0-9AB]\))(*)/}
+        [[ ! $nbase = $base ]] && continue # This should never happen
+        [[ -z ${match[2]} ]] && match[2]="0xDEADBEEF" # Placeholder for no suffix
+        discset[${base}]+=${:-${match[1]}":"${match[2]}$'\x00'}
+    done
+
+    # If there's only one file suffix, use it
+    local -a nsuff=(${(u)${(0)discset[$base]}##*:})
+    (( $#nsuff == 1 )) && { print "${base}${suff}" ; return }
+
+    # If there's multiple suffixes but only one set of discs, just use base name
+    local -a discs=(${${(0)discset[$base]}%%:*})
+    (( $#discs == ${#${(@u)discs}} )) && { print "${base}" ; return }
+
+    # If the number of disc sets matches the number of different suffixes,
+    # *assume* there's a unique suffix per set
+    local dsets=$(( ${#discs} / ${#${(@u)discs}} ))
+    (( $dsets == $#nsuff )) && { print "${base}${suff}" ; return }
+
+    # This is as far as I'm willing to go with programmatical heuristics
+    print ; return 1
+}
+
 game_menu () {
     local -a selected_tags menu_tags menu_items
     local -i itemwidth retval i
-    local filter tmpdata st
+    local filter tmpdata st rominfo
 
     while true; do
         # Optional filter string for narrowing down the game list
@@ -424,6 +475,7 @@ game_menu () {
 
         # Due to cdialog bug, checklist doesn't wrap correctly.
         # For display, remove any prefix subdirectories and file extension, then trim length if needed.
+        # XXX: ${array[(r)${(l.${#${(O@)array//?/X}[1]}..?.)}]} <- only cut prefix if needed?
         itemwidth=$(( $MAXWIDTH - 14 ))
         for (( i=1 ; i<=${#menu_tags}; ++i )) ; do
             # Restore selected items, if any
@@ -514,6 +566,10 @@ get_config
 # Download ROM repository metadata XML files, if they haven't already been downloaded.
 fetch_metadata
 
+# Secret feature, optional cmdline argument is a directory with .CHD files
+# to sort into their own subdirectories.
+[[ -n $* ]] && { organise_chd_dir $* ; return }
+
 ###########
 # Main loop
 while true; do
@@ -528,7 +584,7 @@ while true; do
     $JOY_MODE && jm="Normal Mode" || jm="Simple Mode"
     $DIALOG --title $TITLE --cancel-label "Quit" --help-button --help-tags --help-status \
         --default-item "$default_item" --extra-button --extra-label "Info" --help-label $jm \
-        --menu "Choose target system/repository:" 0 80 0 ${SUPPORTED_CORES} 2>$DIALOG_TEMPFILE
+        --menu "Choose target system/repository:" 0 80 0 $SUPPORTED_CORES 2>$DIALOG_TEMPFILE
     retval=$?
 
     case $retval in
@@ -549,8 +605,8 @@ while true; do
         # Show information for currently selected ROM repository
         $DIALOG_EXTRA)
             select_core $(<$DIALOG_TEMPFILE)
-            t=$($XMLLINT ${CORE_META_XML} --xpath "string(metadata/title)")
-            d=$($XMLLINT ${CORE_META_XML} --xpath "string(metadata/addeddate)")
+            t=$($XMLLINT $CORE_META_XML --xpath "string(metadata/title)")
+            d=$($XMLLINT $CORE_META_XML --xpath "string(metadata/addeddate)")
             $DIALOG --title "ROM repository info" --msgbox "\
 Core:  $CORE \n\
 URL:   $CORE_URL \n\
