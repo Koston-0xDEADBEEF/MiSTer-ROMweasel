@@ -385,7 +385,7 @@ organise_chd_dir () {
         fi
 
         # Find other files with same basename and send off to neural network quantum AI
-        local -a ntags=(${gamedir}/${base}*.chd)
+        local -a ntags=(${(M)${${(@f)tags%.chd}##*/}:#${base}*})
         nbase=$(find_basename "$tag" $ntags)
         if [[ $? -eq 0 ]]; then
             print "\e[33m${${tags[i]}##*/}\e[0m -> \e[36m${nbase}\e[0m/"
