@@ -201,7 +201,7 @@ urlencode () {
 
 cleanup () {
     [[ -f $DIALOG_TEMPFILE ]] && rm $DIALOG_TEMPFILE
-    [[ $(ls -A ${CACHE_DIR}) ]] && print "Warning: cache dir $CACHE_DIR not empty"
+    [[ $(ls -A $CACHE_DIR) ]] && print "Warning: cache dir $CACHE_DIR not empty"
     exit 0
 }
 
@@ -243,7 +243,7 @@ fetch_metadata () {
 # Display information for selected ROMs
 get_rom_info () {
     local -a tags=($*)
-    local rominfo="" totalsize=0 tag
+    local rominfo="" totalsize=0 tag dest
     for tag in $tags; do
         local romsize=$(get_tag_filesize "$tag")
         # MiSTer Zsh is compiled with only 4-byte integers, so shell
