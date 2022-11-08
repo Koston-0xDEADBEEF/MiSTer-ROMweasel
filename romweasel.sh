@@ -38,6 +38,7 @@ init_static_globals () {
         "GG"        "SEGA Game Gear" \
         "MD"        "SEGA Mega Drive" \
         "MCD"       "SEGA MegaCD / SegaCD" \
+        "SS"        "SEGA Saturn" \
         "PSXUS"     "Sony PlayStation USA" \
         "PSXEU"     "Sony PlayStation Europe" \
         "PSXJP"     "Sony PlayStation Japan" \
@@ -79,6 +80,9 @@ init_static_globals () {
     typeset -gr MCD_URL="https://archive.org/download/chd_segacd"
     typeset -gr MCD_FILES_XML="chd_segacd_files.xml"
     typeset -gr MCD_META_XML="chd_segacd_meta.xml"
+    typeset -gr SS_URL="https://archive.org/download/chd_saturn"
+    typeset -gr SS_FILES_XML="chd_saturn_files.xml"
+    typeset -gr SS_META_XML="chd_saturn_meta.xml"
     typeset -gr PSXUS_URL="https://archive.org/download/chd_psx"
     typeset -gr PSXUS_FILES_XML="chd_psx_files.xml"
     typeset -gr PSXUS_META_XML="chd_psx_meta.xml"
@@ -134,6 +138,7 @@ set_conf_opts () {
     typeset -gr GG_GAMEDIR=${GG_GAMEDIR:-/media/fat/games/SMS}
     typeset -gr MD_GAMEDIR=${MD_GAMEDIR:-/media/fat/games/Genesis}
     typeset -gr MCD_GAMEDIR=${MCD_GAMEDIR:-/media/fat/games/MegaCD}
+    typeset -gr SS_GAMEDIR=${SS_GAMEDIR:-/media/fat/games/Saturn}
     typeset -gr PSXUS_GAMEDIR=${PSXUS_GAMEDIR:-/media/fat/games/PSX}
     typeset -gr PSXEU_GAMEDIR=${PSXEU_GAMEDIR:-/media/fat/games/PSX}
     typeset -gr PSXJP_GAMEDIR=${PSXJP_GAMEDIR:-/media/fat/games/PSX}
@@ -448,19 +453,12 @@ find_basename () {
     print ; return 1
 }
 
-get_files_xml () {
-    local tmpdata=$($XMLLINT $CORE_FILES_XML --xpath "files/file[sha1]/@name")
-    local -a menu_tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.(7z|chd)}//\&amp\;/&})
-    print $menu_tags
-}
-
 game_menu () {
     local -a all_tags selected_tags menu_tags menu_items subdirs submenu
     local -i itemwidth retval i
     local filter tmpdata st rominfo sub match mbegin mend
 
     # Full list of all games in current core XML
-    #all_tags=($(get_files_xml))
     tmpdata=$($XMLLINT $CORE_FILES_XML --xpath "files/file[sha1]/@name")
     all_tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.(7z|chd)}//\&amp\;/&})
     unset tmpdata
