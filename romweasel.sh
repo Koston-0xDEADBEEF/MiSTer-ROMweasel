@@ -217,12 +217,6 @@ cleanup () {
 
 # Download XML files containing all ROM metadata
 fetch_metadata () {
-    # Once the files are downloaded, they are never automatically updated. This would be trivial to achieve
-    # using curl -z <file> option, but going through them all is quite slow and very rarely required.
-    # Instead, user needs to manually remove the $DLDONE file.
-    [[ -f $DLDONE ]] && return 0
-
-    rm ${WRK_DIR}/*.xml
     curl_opts=(--connect-timeout 5 --retry 3 --retry-delay 5 -skLO)
 
     # Loop through the list of ROM repositories
@@ -230,22 +224,19 @@ fetch_metadata () {
         # Print some calming statistics via dialog gauge widget while downloading
         printf "%s\n" "XXX"
         printf "%i\n" $(( 100.0 / ${#SUPPORTED_CORES} * $i ))
-        printf "%s\n\n" "Downloading ROM repository metadata XML files (this is only done once)"
+        printf "%s\n\n" "Downloading ROM repository metadata XML files"
         printf "%s\n" "Currently downloading $(((${i}+1)/2)) of $((${#SUPPORTED_CORES}/2)):"
         printf "%s\n" "${SUPPORTED_CORES[$(($i+1))]}"
         printf "%s\n" "XXX"
-
         select_core ${SUPPORTED_CORES[i]}
-        # Download via curl
-        $CURL $curl_opts ${CORE_URL}/${CORE_FILES_XML}
-        $CURL $curl_opts ${CORE_URL}/${CORE_META_XML}
+        [[ -f ${CORE_FILES_XML} ]] || $CURL $curl_opts ${CORE_URL}/${CORE_FILES_XML}
+        [[ -f ${CORE_META_XML} ]] || $CURL $curl_opts ${CORE_URL}/${CORE_META_XML}
     done) |\
         $DIALOG --title $TITLE --gauge \
             "Downloading ROM repository metadata XML files (total: $((${#SUPPORTED_CORES}/2)))" \
             16 $(($MAXWIDTH / 2)) 0
 
     [[ $? -ne $DIALOG_OK ]] && cleanup
-    touch $DLDONE
     unset curl_opts i
 }
 
