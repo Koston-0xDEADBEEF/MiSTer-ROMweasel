@@ -161,7 +161,7 @@ get_config () {
     typeset -g TITLE=${ROMWEASEL_VERSION}
 
     if [[ -f ${SETTINGS_SH} ]]; then
-        t=$(source ${SETTINGS_SH} 2>&1)
+        local t=$(source ${SETTINGS_SH} 2>&1)
         [[ -n $t ]] && { print "Error parsing user configuration file: $t" ; cleanup }
         source ${SETTINGS_SH}
         set_conf_opts ; return
@@ -457,16 +457,18 @@ game_menu () {
     # repositories - reserves *far* too much memory, sigh. Looks cool tho.
     #all_tags=(${${(o)all_tags:t}/(#b)(*)/${(M)all_tags:#*${match}}})
 
+    if [[ -n ${(M)all_tags:#*/*} ]]; then
     # Sorting with an associative array instead.. lame lol
     local -A tt
     for n in $all_tags ; tt[${n:t}]=${n:h}
     all_tags=()
     for n in ${(ok)tt} ; all_tags+=(${tt[$n]}/$n)
     unset tt
+    fi
     # First check if repository contains subdirectories and if
     # user wants to only look at a specific one or all of them
     subdirs=(${(u)all_tags//(#b)(*\/)*/$match[1]})
-    if (( $#subdirs != $#all_tags )); then
+    if (( $#subdirs != $#all_tags )) && (( $#subdirs > 1 )); then
         submenu=("ALL" "[[ All of them ]]")
         for sub in $subdirs; submenu+=($sub $sub)
         $DIALOG --clear --title $TITLE --no-tags --menu \
