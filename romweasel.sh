@@ -488,7 +488,7 @@ game_menu () {
         if [[ -z $selected_tags ]]; then
             # Optional filter string for narrowing down the game list
             if [[ -n $filter ]]; then
-                menu_tags=(${(M)all_tags:#*${filter}*})
+                menu_tags=(${(M)all_tags:#(#i)*${filter}*})
             else
                 menu_tags=($all_tags)
             fi
