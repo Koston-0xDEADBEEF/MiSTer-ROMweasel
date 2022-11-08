@@ -5,7 +5,7 @@ setopt localoptions extendedglob pipefail warnnestedvar nullglob
 
 # Initialise all readonly global variables
 init_static_globals () {
-    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.3"
+    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.4"
 
     # Required software to run
     typeset -gr XMLLINT=$(which xmllint)    || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -198,6 +198,9 @@ humanise () { print $(${NUMFMT} --to=iec-i --suffix=B --format="%9.2f" ${1}) }
 # URL encode a string, including parenthesis but not a slash
 urlencode () {
     local input=(${(s::)1})
+    # Set by backreference glob (#b), and since they get set for each character to
+    # encode, option WARN_NESTED_VAR will complain loudly if they're not declared local.
+    local match mbegin mend
     print ${(j::)input/(#b)([^A-Za-z0-9_.!~*\-\/])/%${(l:2::0:)$(([##16]#match))}}
 }
 
@@ -401,7 +404,7 @@ organise_chd_dir () {
 find_basename () {
     local tag=${(Q)1##*/}
     local -a ntags=(${(Q)@[2,-1]##*/})
-    local ntag match mbegin mend # Set by backreference glob (#b)
+    local s subdir ntag match mbegin mend
     local base=${tag//(#b) \(Disc [0-9AB]\)(*)/}
     local suff="${match}"
 
@@ -445,38 +448,57 @@ find_basename () {
     print ; return 1
 }
 
+get_files_xml () {
+    local tmpdata=$($XMLLINT $CORE_FILES_XML --xpath "files/file[sha1]/@name")
+    local -a menu_tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.(7z|chd)}//\&amp\;/&})
+    print $menu_tags
+}
+
 game_menu () {
-    local -a selected_tags menu_tags menu_items
+    local -a all_tags selected_tags menu_tags menu_items subdirs submenu
     local -i itemwidth retval i
-    local filter tmpdata st rominfo
+    local filter tmpdata st rominfo sub match mbegin mend
 
-    while true; do
-        # Optional filter string for narrowing down the game list
-        if [[ -n $filter ]]; then
-            # xmllint (via libxml2) only supports XPath 1.0, which has no regexp matching
-            # or case-insensitive search, so translate() is used instead to temporarily
-            # change both searched string and data to all lowercase.  This may or may not
-            # survive outside ASCII.
-            tmpdata=$($XMLLINT $CORE_FILES_XML --xpath "files/file[sha1][contains(translate(\
-                @name, \"${(U)filter}\", \"${(L)filter}\"), \"${(L)filter}\")]/@name")
-        else
-            tmpdata=$($XMLLINT $CORE_FILES_XML --xpath "files/file[sha1]/@name")
+    # Full list of all games in current core XML
+    #all_tags=($(get_files_xml))
+    tmpdata=$($XMLLINT $CORE_FILES_XML --xpath "files/file[sha1]/@name")
+    all_tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.(7z|chd)}//\&amp\;/&})
+    unset tmpdata
+
+    # First check if repository contains subdirectories and if
+    # user wants to only look at a specific one or all of them
+    subdirs=(${(u)all_tags//(#b)(*\/)*/$match[1]})
+    if (( $#subdirs != $#all_tags )); then
+        submenu=("ALL" "[[ All of them ]]")
+        for sub in $subdirs; submenu+=($sub $sub)
+        $DIALOG --clear --title $TITLE --no-tags --menu \
+            "This repository contains subdirectories, please select which one to browse." \
+            0 0 0 $submenu 2>$DIALOG_TEMPFILE
+        (( $? != $DIALOG_OK )) && return
+        sub=$(<$DIALOG_TEMPFILE)
+        if [[ ! "$sub" = "ALL" ]] ; then
+            all_tags=(${(M)all_tags:#${sub}*})
+            sub="subdirectory: ${sub%\/}, "
+        else unset sub
         fi
+    fi
 
-        # Construct list of games to display.
-        #
-        # Input data is a string, with values separated
-        # by newlines and each line is in form:
-        #  name="Remote Filename.ext"
-        # - All files not ending in .7z or .chd are stripped
-        # - Restore &amp; encoded ampersand to '&'
-        menu_tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.(7z|chd)}//\&amp\;/&}) ; unset tmpdata
-        menu_items=()
+    # Main loop
+    while true; do
+        if [[ -z $selected_tags ]]; then
+            # Optional filter string for narrowing down the game list
+            if [[ -n $filter ]]; then
+                menu_tags=(${(M)all_tags:#*${filter}*})
+            else
+                menu_tags=($all_tags)
+            fi
+        fi
 
         # Due to cdialog bug, checklist doesn't wrap correctly.
         # For display, remove any prefix subdirectories and file extension, then trim length if needed.
         # XXX: ${array[(r)${(l.${#${(O@)array//?/X}[1]}..?.)}]} <- only cut prefix if needed?
         itemwidth=$(( $MAXWIDTH - 14 ))
+        menu_items=()
         for (( i=1 ; i<=${#menu_tags}; ++i )) ; do
             # Restore selected items, if any
             (( ${selected_tags[(Ie)${menu_tags[$i]}]} )) && st="On" || st="0"
@@ -496,13 +518,13 @@ game_menu () {
         if $JOY_MODE; then
             $DIALOG --clear --title $TITLE --extra-button --extra-label "ROM info" \
                 --no-tags --cancel-label "Back" --ok-label "Download" --default-item "$selected_tags"\
-                --menu "Choose game to download (core: ${CORE}, games total: ${#menu_tags})" \
+                --menu "Choose game to download (core: ${CORE}, ${sub}games total: ${#menu_tags})" \
                 $MAXHEIGHT $MAXWIDTH $#menu_tags $menu_items 2>$DIALOG_TEMPFILE
         else
             $DIALOG --clear --title $TITLE --separate-output --extra-button --extra-label "ROM info" \
                 --no-tags --cancel-label "Back" --help-button --help-tags --help-label "Filter..." \
                 --ok-label "Download" --default-item "${selected_tags[1]}" \
-                --checklist "Choose game(s) to download (core: ${CORE}, games total: $#menu_tags)" \
+                --checklist "Choose game(s) to download (core: ${CORE}, ${sub}games total: $#menu_tags)" \
                 $MAXHEIGHT $MAXWIDTH $#menu_tags $menu_items 2>$DIALOG_TEMPFILE
         fi
         retval=$?
@@ -512,7 +534,12 @@ game_menu () {
         case $retval in
             # Download selected games
             $DIALOG_OK)
+                if [[ -z $selected_tags ]]; then
+                    $DIALOG --title $TITLE --msgbox "No ROMs selected!" 0 0
+                    continue
+                fi
                 download_roms $selected_tags
+                # In simple mode, return navigation to last downloaded item
                 $JOY_MODE || unset selected_tags filter
                 continue ;;
 
@@ -529,6 +556,10 @@ game_menu () {
 
             # Show some data for selected ROM(s)
             $DIALOG_EXTRA)
+                if [[ -z $selected_tags ]]; then
+                    $DIALOG --title $TITLE --msgbox "No ROMs selected!" 0 0
+                    continue
+                fi
                 rominfo="$(get_rom_info $selected_tags)"
                 $DIALOG --title "Information for selected ROM(s)" --clear --cr-wrap --colors \
                     --msgbox "$rominfo" $(( $MAXHEIGHT / 2 )) $MAXWIDTH 2>$DIALOG_TEMPFILE
@@ -546,79 +577,87 @@ game_menu () {
 # MAIN SCREEN TURN ON
 #
 
-init_static_globals
+main () {
+    local -i retval
+    local jm t d
 
-# Work directory contains:
-# - Downloaded ROM repository XML metadata files, indicated by $DLDONE file
-# - User configurable settings in $SETTINGS_SH
-# - Cache dir for temporarily storing downloaded ROMs
-[[ -d $WRK_DIR ]] || mkdir -p $WRK_DIR
-[[ -d $CACHE_DIR ]] || mkdir $CACHE_DIR
-pushd $WRK_DIR
+    init_static_globals
 
-# Cleanup in case of unclean exit
-trap 'cleanup' $SIG_HUP $SIG_INT $SIG_QUIT $SIG_TERM
+    # Work directory contains:
+    # - Downloaded ROM repository XML metadata files, indicated by $DLDONE file
+    # - User configurable settings in $SETTINGS_SH
+    # - Cache dir for temporarily storing downloaded ROMs
+    [[ -d $WRK_DIR ]] || mkdir -p $WRK_DIR
+    [[ -d $CACHE_DIR ]] || mkdir $CACHE_DIR
+    pushd $WRK_DIR
 
-# Fetch user-configurable configuration settings from ${SETTINGS_SH} or create it if it doesn't yet exist,
-# then set defaults for all which weren't explicitly set by the user.
-get_config
+    # Cleanup in case of unclean exit
+    trap 'cleanup' $SIG_HUP $SIG_INT $SIG_QUIT $SIG_TERM
 
-# Download ROM repository metadata XML files, if they haven't already been downloaded.
-fetch_metadata
+    # Fetch user-configurable configuration settings from ${SETTINGS_SH} or create it if it
+    # doesn't yet exist, then set defaults for all which weren't explicitly set by the user.
+    get_config
 
-# Secret feature, optional cmdline argument is a directory with .CHD files
-# to sort into their own subdirectories.
-[[ -n $* ]] && { organise_chd_dir $* ; return }
+    # Download ROM repository metadata XML files, if they haven't already been downloaded.
+    fetch_metadata
 
-###########
-# Main loop
-while true; do
-    # Restore menu position, if any
-    default_item=${CORE:-0}
+    # Secret feature, optional cmdline argument is a directory with .CHD files
+    # to sort into their own subdirectories.
+    [[ -n $* ]] && { organise_chd_dir $* ; return }
 
-    # Set special title for simple mode
-    $JOY_MODE && jm=" (Simple Mode)" || unset jm
-    TITLE="${ROMWEASEL_VERSION}${jm}"
+    ###########
+    # Main loop
+    while true; do
+        # Restore menu position, if any
+        local default_item=${CORE:-0}
 
-    # Show main ROM repository menu
-    $JOY_MODE && jm="Normal Mode" || jm="Simple Mode"
-    $DIALOG --title $TITLE --cancel-label "Quit" --help-button --help-tags --help-status \
-        --default-item "$default_item" --extra-button --extra-label "Info" --help-label $jm \
-        --menu "Choose target system/repository:" 0 80 0 $SUPPORTED_CORES 2>$DIALOG_TEMPFILE
-    retval=$?
+        # Set special title for simple mode
+        $JOY_MODE && jm=" (Simple Mode)" || unset jm
+        typeset -g TITLE="${ROMWEASEL_VERSION}${jm}"
 
-    case $retval in
-        # Open game list for selected ROM repository
-        $DIALOG_OK)
-            select_core $(<$DIALOG_TEMPFILE)
-            game_menu ;;
+        # Show main ROM repository menu
+        $JOY_MODE && jm="Normal Mode" || jm="Simple Mode"
+        $DIALOG --title $TITLE --cancel-label "Quit" --help-button --help-tags --help-status \
+            --default-item "$default_item" --extra-button --extra-label "Info" --help-label $jm \
+            --menu "Choose target system/repository:" 0 80 0 $SUPPORTED_CORES 2>$DIALOG_TEMPFILE
+        retval=$?
 
-        # Repurposed for toggling simplified joystick mode on and off
-        $DIALOG_HELP)
-            select_core ${(@f)$(<$DIALOG_TEMPFILE)[2]}
-            $JOY_MODE && { JOY_MODE=false ; jm='\Z6Disabled!\Zn' } || { JOY_MODE=true ; jm='\Z5Enabled!\Zn' }
-            $DIALOG --title $TITLE --cr-wrap --colors --msgbox "Simplified joystick mode:\n\n$jm" \
-                8 0 2>$DIALOG_TEMPFILE
-            [[ $? -ne $DIALOG_OK ]] && cleanup
-            ;;
+        case $retval in
+            # Open game list for selected ROM repository
+            $DIALOG_OK)
+                select_core $(<$DIALOG_TEMPFILE)
+                game_menu ;;
 
-        # Show information for currently selected ROM repository
-        $DIALOG_EXTRA)
-            select_core $(<$DIALOG_TEMPFILE)
-            t=$($XMLLINT $CORE_META_XML --xpath "string(metadata/title)")
-            d=$($XMLLINT $CORE_META_XML --xpath "string(metadata/addeddate)")
-            $DIALOG --title "ROM repository info" --msgbox "\
+            # Repurposed for toggling simplified joystick mode on and off
+            $DIALOG_HELP)
+                select_core ${(@f)$(<$DIALOG_TEMPFILE)[2]}
+                $JOY_MODE && { JOY_MODE=false ; jm='\Z6Disabled!\Zn' } || { JOY_MODE=true ; jm='\Z5Enabled!\Zn' }
+                $DIALOG --title $TITLE --cr-wrap --colors --msgbox "Simplified joystick mode:\n\n$jm" \
+                    8 0 2>$DIALOG_TEMPFILE
+                [[ $? -ne $DIALOG_OK ]] && cleanup
+                ;;
+
+            # Show information for currently selected ROM repository
+            $DIALOG_EXTRA)
+                select_core $(<$DIALOG_TEMPFILE)
+                t=$($XMLLINT $CORE_META_XML --xpath "string(metadata/title)")
+                d=$($XMLLINT $CORE_META_XML --xpath "string(metadata/addeddate)")
+                $DIALOG --title "ROM repository info" --msgbox "\
 Core:  $CORE \n\
 URL:   $CORE_URL \n\
 Title: $t \n\
 Added: $d" 10 $MAXWIDTH
-            unset t d
-            ;;
+                unset t d
+                ;;
 
-        *)
-            break ;;
-        esac
-done
+            *)
+                break ;;
+            esac
+    done
 
-# Clean up temporary files
-cleanup
+    # Clean up temporary files
+    cleanup
+}
+
+## For easy debug/test entry point
+main $*

@@ -1,6 +1,6 @@
 # MiSTer-ROMweasel
 
-ROM downloader tool for MiSTer FPGA (preview version 0.9.3)
+ROM downloader tool for MiSTer FPGA (preview version 0.9.4)
 
 Thread in official MiSTer Forum: https://misterfpga.org/viewtopic.php?p=63089
 
@@ -22,6 +22,7 @@ configurable settings, or if the file doesn't exist, creates it.
 ## Features
 
 - Filter ROM lists by keyword
+- Separate simpler mode for joystic-only operation
 - Verify each ROM checksum after donwloading
 - If an interrupted download is retried, attempts to continue where it left off
 
