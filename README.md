@@ -1,6 +1,6 @@
 # MiSTer-ROMweasel
 
-ROM downloader tool for MiSTer FPGA (preview version 0.9.4)
+ROM downloader tool for MiSTer FPGA (preview version 0.9.5)
 
 Thread in official MiSTer Forum: https://misterfpga.org/viewtopic.php?p=63089
 
@@ -25,5 +25,14 @@ configurable settings, or if the file doesn't exist, creates it.
 - Separate simpler mode for joystic-only operation
 - Verify each ROM checksum after donwloading
 - If an interrupted download is retried, attempts to continue where it left off
+
+## Tips
+
+Run it from a shell via SSH, it can be left to download in the background while
+you play games. Just don't cold-reboot the system.
+
+If executed from cmdline with a directory path as argument, `.chd` files in that
+directory are sorted into their own subdirectories. If it fails to automatically
+determine correct subdirectory name, that file is simply not moved.
 
 Licensed under BSD 2-clause license.

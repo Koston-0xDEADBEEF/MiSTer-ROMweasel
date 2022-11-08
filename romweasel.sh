@@ -5,7 +5,7 @@ setopt localoptions extendedglob pipefail warnnestedvar nullglob
 
 # Initialise all readonly global variables
 init_static_globals () {
-    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.4"
+    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.5"
 
     # Required software to run
     typeset -gr XMLLINT=$(which xmllint)    || { print "ERROR: 'xmllint' not found" ; return 1 }
