@@ -251,7 +251,6 @@ get_rom_info () {
         totalsize=$(print "$totalsize + $romsize" | ${BC})
         file_name="$(get_tag_filename "$tag")"
         rominfo+="File name: ${file_name##*/}\n"
-#        rominfo+="File URL:  ${CORE_URL}/$(urlencode ${file_name})\n"
         rominfo+="File size: $(humanise $romsize)\n"
         dest="$(get_rom_gamedir "$tag")"
         if [[ $? -ne 0 ]]; then
@@ -447,13 +446,23 @@ find_basename () {
 game_menu () {
     local -a all_tags selected_tags menu_tags menu_items subdirs submenu
     local -i itemwidth retval i
-    local filter tmpdata st rominfo sub match mbegin mend
+    local filter tmpdata st rominfo sub match mbegin mend n
 
     # Full list of all games in current core XML
     tmpdata=$($XMLLINT $CORE_FILES_XML --xpath "files/file[sha1]/@name")
     all_tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.(7z|chd)}//\&amp\;/&})
     unset tmpdata
 
+    # This *tarded sorting method crashes the whole MiSTer with bigger
+    # repositories - reserves *far* too much memory, sigh. Looks cool tho.
+    #all_tags=(${${(o)all_tags:t}/(#b)(*)/${(M)all_tags:#*${match}}})
+
+    # Sorting with an associative array instead.. lame lol
+    local -A tt
+    for n in $all_tags ; tt[${n:t}]=${n:h}
+    all_tags=()
+    for n in ${(ok)tt} ; all_tags+=(${tt[$n]}/$n)
+    unset tt
     # First check if repository contains subdirectories and if
     # user wants to only look at a specific one or all of them
     subdirs=(${(u)all_tags//(#b)(*\/)*/$match[1]})
