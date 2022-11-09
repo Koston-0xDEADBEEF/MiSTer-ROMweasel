@@ -25,6 +25,9 @@ init_static_globals () {
     # If this file exists, skip downloading XML metadata files
     typeset -gr DLDONE="${WRK_DIR}/.dl_done"
 
+    # MiSTer installation root
+    typeset -gr MISTER_ROOT="/media/fat"
+
     # Supported ROM repositories
     typeset -gra SUPPORTED_CORES=( \
         "NES"       "Nintendo Entertainment System" \
@@ -44,6 +47,7 @@ init_static_globals () {
         "PSXJP"     "Sony PlayStation Japan" \
         "PSXJP2"    "Sony PlayStation Japan #2" \
         "PSXMISC"   "Sony PlayStation Miscellaneous" \
+        "AMIGA"     "Commodore Amiga (MegaAGS) **NOT TESTED**" \
     )
 
     # The prefix "NAME_" must match the core name in above list
@@ -98,6 +102,9 @@ init_static_globals () {
     typeset -gr PSXMISC_URL="https://archive.org/download/chd_psx_misc"
     typeset -gr PSXMISC_FILES_XML="chd_psx_misc_files.xml"
     typeset -gr PSXMISC_META_XML="chd_psx_misc_meta.xml"
+    typeset -gr AMIGA_URL="https://archive.org/download/megaags"
+    typeset -gr AMIGA_FILES_XML="megaags_files.xml"
+    typeset -gr AMIGA_META_XML="megaags_meta.xml"
 
     # Dialog box maximum size, leave a small border in case of overscan
     typeset -gr MAXHEIGHT=$(( $LINES - 4 ))
@@ -144,6 +151,7 @@ set_conf_opts () {
     typeset -gr PSXJP_GAMEDIR=${PSXJP_GAMEDIR:-/media/fat/games/PSX}
     typeset -gr PSXJP2_GAMEDIR=${PSXJP2_GAMEDIR:-/media/fat/games/PSX}
     typeset -gr PSXMISC_GAMEDIR=${PSXMISC_GAMEDIR:-/media/fat/games/PSX}
+    typeset -gr AMIGA_GAMEDIR=${AMIGA_GAMEDIR:-/media/fat/games/Amiga}
     # Simplified mode for use without a keyboard (true/false toggle)
     typeset -g JOY_MODE=${JOY_MODE:-true}
 }
@@ -238,6 +246,54 @@ fetch_metadata () {
 
     [[ $? -ne $DIALOG_OK ]] && cleanup
     unset curl_opts i
+}
+
+install_amiga () {
+    local magsfile="$*"   # Path to downloaded MegaAGS .7z
+    local cachedir="${CACHE_DIR}/megaags"
+    local readme="MegaAGS-ReadMe.txt"
+    local savefile="MegaAGS-Saves.hdf"  # Save data, important to not overwrite!
+    local diskfile="MegaAGS.hdf"        # Too big for checksumming
+    local newf oldf mdir newsum oldsum msg
+    local -a magsfiles
+    local -i retval
+
+    [[ -d "$cachedir" ]] || mkdir "$cachedir"
+    pushd "$cachedir"   # Remember where you are
+    # If the MegaAGS archive doesn't exist, assume it's because the install got
+    # interrupted previously after unpacking and deleting it
+    if [[ -f "$magsfile" ]]; then
+        print "Extracting MegaAGS...(this will take a while)"
+        # Overwrite without asking, in case unpacking was previously interrupted
+        $SZR x "$magsfile" -y -o"$cachedir"
+        (( $? != 0 )) && { print "ERROR: File $magsfile failed to extract cleanly! Corrupted?" ; return }
+        rm "$magsfile"
+    fi
+
+    magsfiles=(**/^${readme}(.)) # All files from the archive except $readme
+    for mdir in ${(u)magsfiles:h:r}; { [[ -d "$mdir" ]] || mkdir -p "${MISTER_ROOT}/$mdir" }
+    for newf in $magsfiles; do
+        oldf="${MISTER_ROOT}/${newf}"
+        # File doesn't exist yet, just install and move on
+        [[ -f "$oldf" ]] || { mv "$newf" "$oldf" ; continue }
+        # File is the savefile and exists, just skip it without even asking
+        [[ "${newf:t}" = "$savefile" ]] && continue
+        # File is the disk image, skip checksum and always install
+        [[ "${newf:t}" = "$diskfile" ]] && { mv "$newf" "$oldf" ; continue }
+
+        # For the rest, compare and ask if replacing a changed file
+        newsum="${${(z):-$($SHA1SUM "$newf")}[1]}"
+        oldsum="${${(z):-$($SHA1SUM "$oldf")}[1]}"
+        [[ $newsum = $oldsum ]] && { rm "$newf" ; continue }
+        msg="File \Z4${newf:t}\Zn from MegaAGS archive differs with locally installed: \Z4${oldf}\Zn. Overwrite?"
+        $DIALOG --title $TITLE --colors --yesno "$msg" 8 ${#msg} 2>/dev/null
+        retval=$?
+        (( $retval == $DIALOG_CANCEL )) && continue
+        (( $retval != $DIALOG_OK )) && cleanup
+        mv "$newf" "$oldf"
+    done
+    # XXX: show readme file to user, copy it somewhere..
+    popd
 }
 
 # Display information for selected ROMs
@@ -352,6 +408,9 @@ download_roms () {
 
         # If the file is compressed, extract it, otherwise just move to destination
         if [[ -z ${tag##*.7z} ]]; then
+            # Amiga MegaAGS needs special attention from here onwards
+            [[ $CORE = "AMIGA" ]] && { install_amiga "$ofile" ; continue }
+            # Simple mode don't ask questions.
             $JOY_MODE && local clobber="-y" || unset clobber
             $SZR e "$ofile" -o"$dest" $clobber
             rm "$ofile"
