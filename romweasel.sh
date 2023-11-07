@@ -5,7 +5,7 @@ setopt localoptions extendedglob pipefail warnnestedvar nullglob
 
 # Initialise all readonly global variables
 init_static_globals () {
-    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.5"
+    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.666"
 
     # Required software to run
     typeset -gr XMLLINT=$(which xmllint)    || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -18,6 +18,7 @@ init_static_globals () {
 
     # Stash all metadata here
     typeset -gr WRK_DIR="/media/fat/Scripts/.config/romweasel"
+    #typeset -gr WRK_DIR="$(PWD)/metadata"
     # User configurable settings
     typeset -gr SETTINGS_SH="${WRK_DIR}/settings.sh"
     # Temporary location for compressed ROMs
@@ -145,7 +146,7 @@ set_conf_opts () {
     typeset -gr PSXJP2_GAMEDIR=${PSXJP2_GAMEDIR:-/media/fat/games/PSX}
     typeset -gr PSXMISC_GAMEDIR=${PSXMISC_GAMEDIR:-/media/fat/games/PSX}
     # Simplified mode for use without a keyboard (true/false toggle)
-    typeset -g JOY_MODE=${JOY_MODE:-true}
+    typeset -g JOY_MODE=${JOY_MODE:-false}
 }
 
 # Dynamically set environment variables to point to currently selected repository
@@ -275,8 +276,8 @@ get_rom_gamedir () {
     # Strip prefix subdir and file extension
     tag=${${(Q)tag%.chd}##*/}
 
-    # MegaCD has additional region specific subdirectories
-    if [[ $CORE = "MCD" ]]; then
+    # MegaCD and Saturn have additional region specific subdirectories
+    if [[ $CORE = "MCD" || $CORE = "SS" ]]; then
         : ${tag/(#b)\((Europe|Japan|USA)\)}
         # If we can't deduce region, well just skip it
         [[ -z $match ]] || odir+="${match}/"
@@ -303,6 +304,7 @@ get_rom_gamedir () {
 # Download selected ROMs
 download_roms () {
     local -a tags=(${*})
+    local tag url ofile
     local rominfo="$(get_rom_info $tags)"
     rominfo+="\nDownload selected game(s)?\n"
 

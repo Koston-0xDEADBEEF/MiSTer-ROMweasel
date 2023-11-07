@@ -1,6 +1,6 @@
 # MiSTer-ROMweasel
 
-ROM downloader tool for MiSTer FPGA (preview version 0.9.5)
+ROM downloader tool for MiSTer FPGA (release version 0.9.666)
 
 Thread in official MiSTer Forum: https://misterfpga.org/viewtopic.php?p=63089
 
@@ -9,10 +9,12 @@ Thread in official MiSTer Forum: https://misterfpga.org/viewtopic.php?p=63089
 Place `romweasel.sh` to `/media/fat/Scripts` directory on the MiSTer. Run
 either from shell via SSH or from the MiSTer UI.
 
-Simple Mode (on by default) only allows downloading a single file at a time
-and game list cannot be filtered, but it works entirely with a joystick.
+Simple Mode (OFF by default) only allows downloading a single file at a time
+and game list cannot be filtered, but it works with button-deprived joysticks.
 
-Use normal mode with a keyboard for more features.
+MiSTer has now added support for controlling the normal mode entirely with a
+joystick, including tagging multiple games at once and PgUp/PgDn. You still
+won't be able to type anything, though.
 
 ## Configuration
 
@@ -22,8 +24,8 @@ configurable settings, or if the file doesn't exist, creates it.
 ## Features
 
 - Filter ROM lists by keyword
-- Separate simpler mode for joystic-only operation
-- Verify each ROM checksum after donwloading
+- Separate simple mode for operating with joysticks with only few buttons
+- Verify each ROM checksum after downloading
 - If an interrupted download is retried, attempts to continue where it left off
 
 ## Tips
