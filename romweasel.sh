@@ -137,7 +137,7 @@ set_conf_opts () {
     typeset -gr TG16CD_GAMEDIR=${TG16CD_GAMEDIR:-/media/fat/games/TGFX16-CD}
     typeset -gr SMS_GAMEDIR=${SMS_GAMEDIR:-/media/fat/games/SMS}
     typeset -gr GG_GAMEDIR=${GG_GAMEDIR:-/media/fat/games/SMS}
-    typeset -gr MD_GAMEDIR=${MD_GAMEDIR:-/media/fat/games/Genesis}
+    typeset -gr MD_GAMEDIR=${MD_GAMEDIR:-/media/fat/games/MegaDrive}
     typeset -gr MCD_GAMEDIR=${MCD_GAMEDIR:-/media/fat/games/MegaCD}
     typeset -gr SS_GAMEDIR=${SS_GAMEDIR:-/media/fat/games/Saturn}
     typeset -gr PSXUS_GAMEDIR=${PSXUS_GAMEDIR:-/media/fat/games/PSX}
