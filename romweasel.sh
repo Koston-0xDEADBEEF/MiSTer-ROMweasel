@@ -5,7 +5,7 @@ setopt localoptions extendedglob pipefail warnnestedvar nullglob
 
 # Initialise all readonly global variables
 init_static_globals () {
-    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.666"
+    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.7"
 
     # Required software to run
     typeset -gr XMLLINT=$(which xmllint)    || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -28,16 +28,20 @@ init_static_globals () {
 
     # Supported ROM repositories
     typeset -gra SUPPORTED_CORES=( \
-        "NES"       "Nintendo Entertainment System" \
-        "SNES"      "Super Nintendo" \
-        "GB"        "Nintendo GameBoy" \
-        "GBC"       "Nintendo GameBoy Color" \
-        "GBA"       "GameBoy Advance" \
-        "TG16"      "NEC TurboGrafx16 / PC-Engine" \
+#
+# XXX: Removed from archive.org, and drop-in replacements aren't available.
+#      Cleanup dead code after determining how to deal with this.
+#
+#        "NES"       "Nintendo Entertainment System" \
+#        "SNES"      "Super Nintendo" \
+#        "GB"        "Nintendo GameBoy" \
+#        "GBC"       "Nintendo GameBoy Color" \
+#        "GBA"       "GameBoy Advance" \
+#        "TG16"      "NEC TurboGrafx16 / PC-Engine" \
         "TG16CD"    "NEC TurboGrafx16-CD / PC-Engine CD" \
-        "SMS"       "SEGA Master System" \
-        "GG"        "SEGA Game Gear" \
-        "MD"        "SEGA Mega Drive" \
+#        "SMS"       "SEGA Master System" \
+#        "GG"        "SEGA Game Gear" \
+#        "MD"        "SEGA Mega Drive" \
         "MCD"       "SEGA MegaCD / SegaCD" \
         "SS"        "SEGA Saturn" \
         "PSXUS"     "Sony PlayStation USA" \
@@ -577,8 +581,6 @@ game_menu () {
 ################################################################################################################
 #
 # MAIN SCREEN TURN ON
-#
-
 main () {
     local -i retval
     local jm t d
@@ -599,6 +601,11 @@ main () {
     # Fetch user-configurable configuration settings from ${SETTINGS_SH} or create it if it
     # doesn't yet exist, then set defaults for all which weren't explicitly set by the user.
     get_config
+
+    # Let user know about ROM sets taken down
+    $DIALOG --title $TITLE --msgbox "\
+        All ROM sources for cart-based systems have been taken down from
+        archive.org, so they are removed also from ROMweasel." 6 80
 
     # Download ROM repository metadata XML files, if they haven't already been downloaded.
     fetch_metadata
