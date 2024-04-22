@@ -5,7 +5,7 @@ setopt localoptions extendedglob pipefail warnnestedvar nullglob
 
 # Initialise all readonly global variables
 init_static_globals () {
-    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.7"
+    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.8"
 
     # Required software to run
     typeset -gr XMLLINT=$(which xmllint)    || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -30,6 +30,7 @@ init_static_globals () {
     typeset -gra SUPPORTED_CORES=( \
         "NES"       "Nintendo Entertainment System" \
         "SNES"      "Super Nintendo" \
+        "N64"       "Nintendo 64" \
         "GB"        "Nintendo GameBoy" \
         "GBC"       "Nintendo GameBoy Color" \
         "GBA"       "GameBoy Advance" \
@@ -54,6 +55,9 @@ init_static_globals () {
     typeset -gr SNES_URL="https://archive.org/download/nointro.snes"
     typeset -gr SNES_FILES_XML="nointro.snes_files.xml"
     typeset -gr SNES_META_XML="nointro.snes_meta.xml"
+    typeset -gr N64_URL="https://archive.org/download/nointro.n64"
+    typeset -gr N64_FILES_XML="nointro.n64_files.xml"
+    typeset -gr N64_META_XML="nointro.n64_meta.xml"
     typeset -gr GB_URL="https://archive.org/download/nointro.gb"
     typeset -gr GB_FILES_XML="nointro.gb_files.xml"
     typeset -gr GB_META_XML="nointro.gb_meta.xml"
@@ -130,6 +134,7 @@ init_static_globals () {
 set_conf_opts () {
     typeset -gr NES_GAMEDIR=${NES_GAMEDIR:-/media/fat/games/NES}
     typeset -gr SNES_GAMEDIR=${SNES_GAMEDIR:-/media/fat/games/SNES}
+    typeset -gr N64_GAMEDIR=${N64_GAMEDIR:-/media/fat/games/N64}
     typeset -gr GB_GAMEDIR=${GB_GAMEDIR:-/media/fat/games/GAMEBOY}
     typeset -gr GBC_GAMEDIR=${GBC_GAMEDIR:-/media/fat/games/GAMEBOY}
     typeset -gr GBA_GAMEDIR=${GBA_GAMEDIR:-/media/fat/games/GBA}
