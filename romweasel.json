@@ -1,0 +1,21 @@
+{
+    "base_files_url": "",
+    "db_files": [],
+    "db_id": "romweasel",
+    "db_url": "https://raw.githubusercontent.com/Koston-0xDEADBEEF/MiSTer-ROMweasel/main/romweasel.json",
+    "default_options": {},
+    "files": {
+        "Scripts/romweasel.sh": {
+            "hash": "9ebe8bc9eeac2853a8af1e0a68bef580",
+            "size": 28536,
+            "url": "https://raw.githubusercontent.com/Koston-0xDEADBEEF/MiSTer-ROMweasel/main/romweasel.sh"
+        }
+    },
+    "folders": {
+        "Scripts": {},
+        "Scripts/.config": {},
+        "Scripts/.config/romweasel": {}
+    },
+    "timestamp": 1713864634,
+    "zips": {}
+}
