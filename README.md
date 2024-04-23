@@ -37,4 +37,15 @@ If executed from cmdline with a directory path as argument, `.chd` files in that
 directory are sorted into their own subdirectories. If it fails to automatically
 determine correct subdirectory name, that file is simply not moved.
 
+## Automatic updates
+
+To enable experimental automatic updates via `update_all.sh`, add these lines
+to your `downloader.ini` file:
+
+```
+[romweasel]
+db_url = https://raw.githubusercontent.com/Koston-0xDEADBEEF/MiSTer-ROMweasel/main/romweasel.json
+```
+
+
 Licensed under BSD 2-clause license.
