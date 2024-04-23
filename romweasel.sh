@@ -5,7 +5,7 @@ setopt localoptions extendedglob pipefail warnnestedvar nullglob
 
 # Initialise all readonly global variables
 init_static_globals () {
-    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.8"
+    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.9"
 
     # Required software to run
     typeset -gr XMLLINT=$(which xmllint)    || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -13,6 +13,8 @@ init_static_globals () {
     typeset -gr DIALOG=$(which dialog)      || { print "ERROR: 'dialog' not found" ; return 1 }
     typeset -gr SHA1SUM=$(which sha1sum)    || { print "ERROR: 'sha1sum' not found" ; return 1 }
     typeset -gr SZR=$(which 7zr)            || { print "ERROR: '7zr' not found" ; return 1 }
+    # Why use zip. Sigh.
+    typeset -gr UNZIP=$(which unzip)        || { print "ERROR: 'unzip' not found" ; return 1 }
     typeset -gr NUMFMT=$(which numfmt)      || { print "ERROR: 'numfmt' not found" ; return 1 }
     typeset -gr BC=$(which bc)              || { print "ERROR: 'bc' not found" ; return 1 }
 
@@ -46,6 +48,7 @@ init_static_globals () {
         "PSXJP"     "Sony PlayStation Japan" \
         "PSXJP2"    "Sony PlayStation Japan #2" \
         "PSXMISC"   "Sony PlayStation Miscellaneous" \
+        "AO486"     "0MHz DOS Collection" \
     )
 
     # The prefix "NAME_" must match the core name in above list
@@ -103,6 +106,9 @@ init_static_globals () {
     typeset -gr PSXMISC_URL="https://archive.org/download/chd_psx_misc"
     typeset -gr PSXMISC_FILES_XML="chd_psx_misc_files.xml"
     typeset -gr PSXMISC_META_XML="chd_psx_misc_meta.xml"
+    typeset -gr AO486_URL="https://archive.org/download/0mhz-dos"
+    typeset -gr AO486_FILES_XML="0mhz-dos_files.xml"
+    typeset -gr AO486_META_XML="0mhz-dos_meta.xml"
 
     # Dialog box maximum size, leave a small border in case of overscan
     typeset -gr MAXHEIGHT=$(( $LINES - 4 ))
@@ -150,6 +156,8 @@ set_conf_opts () {
     typeset -gr PSXJP_GAMEDIR=${PSXJP_GAMEDIR:-/media/fat/games/PSX}
     typeset -gr PSXJP2_GAMEDIR=${PSXJP2_GAMEDIR:-/media/fat/games/PSX}
     typeset -gr PSXMISC_GAMEDIR=${PSXMISC_GAMEDIR:-/media/fat/games/PSX}
+    # The 0MHz DOS zips have required directory structure builtin (smart!)
+    typeset -gr AO486_GAMEDIR=${AO486_GAMEDIR:-/media/fat}
     # Simplified mode for use without a keyboard (true/false toggle)
     typeset -g JOY_MODE=${JOY_MODE:-false}
 }
@@ -275,7 +283,7 @@ get_rom_gamedir () {
     local match mbegin mend # Set by backreference glob (#b)
 
     # For compressed files, it's always just the core main ROM directory
-    [[ -z ${tag##*.7z} ]] && { print "$odir" ; return }
+    [[ -z ${tag##*.7z} || $CORE -eq "AO486" ]] && { print "$odir" ; return }
 
     # Strip prefix subdir and file extension
     tag=${${(Q)tag%.chd}##*/}
@@ -358,8 +366,10 @@ download_roms () {
 
         # If the file is compressed, extract it, otherwise just move to destination
         if [[ -z ${tag##*.7z} ]]; then
-            $JOY_MODE && local clobber="-y" || unset clobber
-            $SZR e "$ofile" -o"$dest" $clobber
+            $SZR e "$ofile" -o"$dest" -y
+            rm "$ofile"
+        elif [[ -z ${tag##*.zip} ]]; then
+            $UNZIP -o -qq -d "$dest" "$ofile"
             rm "$ofile"
         else
             mv "$ofile" "$dest"
@@ -456,7 +466,7 @@ game_menu () {
 
     # Full list of all games in current core XML
     tmpdata=$($XMLLINT $CORE_FILES_XML --xpath "files/file[sha1]/@name")
-    all_tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.(7z|chd)}//\&amp\;/&})
+    all_tags=(${${${${${(@f)tmpdata}#*\"}%\"*}:#^*.(7z|zip|chd)}//\&amp\;/&})
     unset tmpdata
 
     # This *tarded sorting method crashes the whole MiSTer with bigger
@@ -509,7 +519,7 @@ game_menu () {
             # Restore selected items, if any
             (( ${selected_tags[(Ie)${menu_tags[$i]}]} )) && st="On" || st="0"
             $JOY_MODE && unset st
-            menu_items+=(${menu_tags[$i]} ${${${menu_tags[$i]##*/}%.(7z|chd)}:0:$itemwidth} $st)
+            menu_items+=(${menu_tags[$i]} ${${${menu_tags[$i]##*/}%.(7z|zip|chd)}:0:$itemwidth} $st)
         done
 
         if [[ -z $menu_items ]]; then
