@@ -1,6 +1,6 @@
 # MiSTer-ROMweasel
 
-ROM downloader tool for MiSTer FPGA (release version 0.9.9)
+ROM downloader tool for MiSTer FPGA (release version 0.9.10)
 
 Thread in official MiSTer Forum: https://misterfpga.org/viewtopic.php?p=63089
 

@@ -5,7 +5,7 @@ setopt localoptions extendedglob pipefail warnnestedvar nullglob
 
 # Initialise all readonly global variables
 init_static_globals () {
-    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.9"
+    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.10"
 
     # Required software to run
     typeset -gr XMLLINT=$(which xmllint)    || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -49,6 +49,7 @@ init_static_globals () {
         "PSXJP2"    "Sony PlayStation Japan #2" \
         "PSXMISC"   "Sony PlayStation Miscellaneous" \
         "AO486"     "0MHz DOS Collection" \
+        "CD32"      "Amiga CD32" \
     )
 
     # The prefix "NAME_" must match the core name in above list
@@ -109,6 +110,9 @@ init_static_globals () {
     typeset -gr AO486_URL="https://archive.org/download/0mhz-dos"
     typeset -gr AO486_FILES_XML="0mhz-dos_files.xml"
     typeset -gr AO486_META_XML="0mhz-dos_meta.xml"
+    typeset -gr CD32_URL="https://archive.org/download/commodore-amiga-cd32-redump-collection"
+    typeset -gr CD32_FILES_XML="commodore-amiga-cd32-redump-collection_files.xml"
+    typeset -gr CD32_META_XML="commodore-amiga-cd32-redump-collection_meta.xml"
 
     # Dialog box maximum size, leave a small border in case of overscan
     typeset -gr MAXHEIGHT=$(( $LINES - 4 ))
@@ -158,6 +162,7 @@ set_conf_opts () {
     typeset -gr PSXMISC_GAMEDIR=${PSXMISC_GAMEDIR:-/media/fat/games/PSX}
     # The 0MHz DOS zips have required directory structure builtin (smart!)
     typeset -gr AO486_GAMEDIR=${AO486_GAMEDIR:-/media/fat}
+    typeset -gr CD32_GAMEDIR=${CD32_GAMEDIR:-/media/fat/games/Amiga/CD32}
     # Simplified mode for use without a keyboard (true/false toggle)
     typeset -g JOY_MODE=${JOY_MODE:-false}
 }
