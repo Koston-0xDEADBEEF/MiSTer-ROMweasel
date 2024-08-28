@@ -5,7 +5,7 @@ setopt localoptions extendedglob pipefail warnnestedvar nullglob
 
 # Initialise all readonly global variables
 init_static_globals () {
-    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.10"
+    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.11"
 
     # Required software to run
     typeset -gr XMLLINT=$(which xmllint)    || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -50,6 +50,10 @@ init_static_globals () {
         "PSXMISC"   "Sony PlayStation Miscellaneous" \
         "AO486"     "0MHz DOS Collection" \
         "CD32"      "Amiga CD32" \
+        "GNW"       "Game & Watch" \
+        "WS"        "WonderSwan" \
+        "WSC"       "WonderSwan Color" \
+        "PV1000"    "Casio PV-1000" \
     )
 
     # The prefix "NAME_" must match the core name in above list
@@ -113,6 +117,18 @@ init_static_globals () {
     typeset -gr CD32_URL="https://archive.org/download/commodore-amiga-cd32-redump-collection"
     typeset -gr CD32_FILES_XML="commodore-amiga-cd32-redump-collection_files.xml"
     typeset -gr CD32_META_XML="commodore-amiga-cd32-redump-collection_meta.xml"
+    typeset -gr GNW_URL="https://archive.org/download/gnw-games"
+    typeset -gr GNW_FILES_XML="gnw-games_files.xml"
+    typeset -gr GNW_META_XML="gnw-games_meta.xml"
+    typeset -gr WS_URL="https://archive.org/download/nointro-bandai-wonderswanwonderswan-color"
+    typeset -gr WS_FILES_XML="nointro-bandai-wonderswanwonderswan-color_files.xml"
+    typeset -gr WS_META_XML="nointro-bandai-wonderswanwonderswan-color_meta.xml"
+    typeset -gr WSC_URL="https://archive.org/download/nointro-bandai-wonderswanwonderswan-color"
+    typeset -gr WSC_FILES_XML="nointro-bandai-wonderswanwonderswan-color_files.xml"
+    typeset -gr WSC_META_XML="nointro-bandai-wonderswanwonderswan-color_meta.xml"
+    typeset -gr PV1000_URL="https://archive.org/download/nointro-casio-loopy-pv-1000"
+    typeset -gr PV1000_FILES_XML="nointro-casio-loopy-pv-1000_files.xml"
+    typeset -gr PV1000_META_XML="nointro-casio-loopy-pv-1000_meta.xml"
 
     # Dialog box maximum size, leave a small border in case of overscan
     typeset -gr MAXHEIGHT=$(( $LINES - 4 ))
@@ -163,6 +179,10 @@ set_conf_opts () {
     # The 0MHz DOS zips have required directory structure builtin (smart!)
     typeset -gr AO486_GAMEDIR=${AO486_GAMEDIR:-/media/fat}
     typeset -gr CD32_GAMEDIR=${CD32_GAMEDIR:-/media/fat/games/Amiga/CD32}
+    typeset -gr GNW_GAMEDIR=${GNW_GAMEDIR:-/media/fat/games/GameNWatch}
+    typeset -gr WS_GAMEDIR=${WS_GAMEDIR:-/media/fat/games/WonderSwan}
+    typeset -gr WSC_GAMEDIR=${WSC_GAMEDIR:-/media/fat/games/WonderSwanColor}
+    typeset -gr PV1000_GAMEDIR=${PV1000_GAMEDIR:-/media/fat/games/Casio_PV-1000}
     # Simplified mode for use without a keyboard (true/false toggle)
     typeset -g JOY_MODE=${JOY_MODE:-false}
 }
