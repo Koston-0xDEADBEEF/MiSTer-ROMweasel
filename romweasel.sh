@@ -263,7 +263,10 @@ cleanup () {
 ia_login () {
     if [[ -z $IA_USER ]] && [[ -z $IA_PASS ]]; then return; fi
 
-    typeset -ga CURL_OPTS+=(-c cookie.tmp -b cookie.tmp)
+    unsetopt warnnestedvar
+    CURL_OPTS+=(-c cookie.tmp -b cookie.tmp)
+    setopt warnnestedvar
+
     # Initiate login process (session id and that shazba)
     $CURL $CURL_OPTS -skLo /dev/null https://archive.org/account/login
 
