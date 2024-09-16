@@ -5,7 +5,7 @@ setopt localoptions extendedglob pipefail warnnestedvar nullglob
 
 # Initialise all readonly global variables
 init_static_globals () {
-    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.11"
+    typeset -gr ROMWEASEL_VERSION="MiSTer ROMweasel v0.9.12"
 
     # Required software to run
     typeset -gr XMLLINT=$(which xmllint)    || { print "ERROR: 'xmllint' not found" ; return 1 }
@@ -17,6 +17,7 @@ init_static_globals () {
     typeset -gr UNZIP=$(which unzip)        || { print "ERROR: 'unzip' not found" ; return 1 }
     typeset -gr NUMFMT=$(which numfmt)      || { print "ERROR: 'numfmt' not found" ; return 1 }
     typeset -gr BC=$(which bc)              || { print "ERROR: 'bc' not found" ; return 1 }
+    typeset -gr JQ=$(which jq)              || { print "ERROR: 'jq' not found" ; return 1 }
 
     # Stash all metadata here
     typeset -gr WRK_DIR="/media/fat/Scripts/.config/romweasel"
@@ -145,6 +146,9 @@ init_static_globals () {
     typeset -grx NCURSES_NO_UTF8_ACS=1
     #export NCURSES_NO_UTF8_ACS
 
+    # Common curl options
+    typeset -ga CURL_OPTS=(--connect-timeout 5 --retry 3 --retry-delay 5)
+
     # dialog(1) writes results to a tempfile via stderr
     typeset -gr DIALOG_TEMPFILE=$(mktemp 2>/dev/null) || DIALOG_TEMPFILE=/tmp/test$$
 
@@ -249,14 +253,39 @@ urlencode () {
 
 cleanup () {
     [[ -f $DIALOG_TEMPFILE ]] && rm $DIALOG_TEMPFILE
+    [[ -f cookie.tmp ]] && rm cookie.tmp
     [[ $(ls -A $CACHE_DIR) ]] && print "Warning: cache dir $CACHE_DIR not empty"
     exit 0
 }
 
+# Login to archive.org and setup a cookie for all downloads, if IA_USER/IA_PASS
+# variables are set.
+ia_login () {
+    if [[ -z $IA_USER ]] && [[ -z $IA_PASS ]]; then return; fi
+
+    typeset -ga CURL_OPTS+=(-c cookie.tmp -b cookie.tmp)
+    # Initiate login process (session id and that shazba)
+    $CURL $CURL_OPTS -skLo /dev/null https://archive.org/account/login
+
+    # Send credentials
+    local u=$(urlencode "$IA_USER")
+    local p=$(urlencode "$IA_PASS")
+    local res=$($CURL $CURL_OPTS -skL -X POST \
+        --data-raw "username=$u&password=$p&remember=true" \
+        https://archive.org/account/login 2>&1)
+
+    # Check if it worked (this is a silly amount of trouble just to get 0/1 exit code.. sigh)
+    $JQ -r 'if .status == "ok" then .status else null | halt_error(1) end' <<< $res >/dev/null 2>&1
+    [[ $? -eq 0 ]] && return
+
+    # It didn't
+    print "Error logging in to archive.org. Please check your IA_USER / IA_PASS variables."
+    cleanup
+}
+
 # Download XML files containing all ROM metadata
 fetch_metadata () {
-    curl_opts=(--connect-timeout 5 --retry 3 --retry-delay 5 -skLO)
-
+    local -i i
     # Loop through the list of ROM repositories
     (for (( i=1; i<${#SUPPORTED_CORES}; i+=2 )) ; do
         # Print some calming statistics via dialog gauge widget while downloading
@@ -267,15 +296,14 @@ fetch_metadata () {
         printf "%s\n" "${SUPPORTED_CORES[$(($i+1))]}"
         printf "%s\n" "XXX"
         select_core ${SUPPORTED_CORES[i]}
-        [[ -f ${CORE_FILES_XML} ]] || $CURL $curl_opts ${CORE_URL}/${CORE_FILES_XML}
-        [[ -f ${CORE_META_XML} ]] || $CURL $curl_opts ${CORE_URL}/${CORE_META_XML}
+        [[ -f ${CORE_FILES_XML} ]] || $CURL $CURL_OPTS -skLO ${CORE_URL}/${CORE_FILES_XML}
+        [[ -f ${CORE_META_XML} ]] || $CURL $CURL_OPTS -skLO ${CORE_URL}/${CORE_META_XML}
     done) |\
         $DIALOG --title $TITLE --gauge \
             "Downloading ROM repository metadata XML files (total: $((${#SUPPORTED_CORES}/2)))" \
             16 $(($MAXWIDTH / 2)) 0
 
     [[ $? -ne $DIALOG_OK ]] && cleanup
-    unset curl_opts i
 }
 
 # Display information for selected ROMs
@@ -352,7 +380,7 @@ download_roms () {
     [[ $retval -ne $DIALOG_OK ]] && cleanup
 
     # In case the file exists already, cURL will attempt to continue the download
-    local curl_opts=(--connect-timeout 5 --retry 3 --retry-delay 5 -C - -kL)
+    local cl=(-C - -kL)
 
     # Make sure target directory exists or if user wants it to be created
     if [[ ! -d $CORE_GAMEDIR ]]; then
@@ -375,7 +403,7 @@ download_roms () {
         # Destination file with full path
         ofile="${CACHE_DIR}/${tag##*/}"
         # Download the file
-        $CURL $curl_opts "$url" -o "$ofile"
+        $CURL $CURL_OPTS $cl "$url" -o "$ofile"
 
         # Verify file checksum
         local filesum="${${(z):-$($SHA1SUM "$ofile")}[1]}"
@@ -637,6 +665,10 @@ main () {
     # Fetch user-configurable configuration settings from ${SETTINGS_SH} or create it if it
     # doesn't yet exist, then set defaults for all which weren't explicitly set by the user.
     get_config
+
+    # Login to archive.org if IA_USER/IA_PASS are set and use a cookie for remainder of
+    # download operations.
+    ia_login
 
     # Download ROM repository metadata XML files, if they haven't already been downloaded.
     fetch_metadata

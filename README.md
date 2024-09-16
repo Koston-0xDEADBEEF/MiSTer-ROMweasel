@@ -1,6 +1,6 @@
 # MiSTer-ROMweasel
 
-ROM downloader tool for MiSTer FPGA (release version 0.9.11)
+ROM downloader tool for MiSTer FPGA (release version 0.9.12)
 
 Thread in official MiSTer Forum: https://misterfpga.org/viewtopic.php?p=63089
 
@@ -20,6 +20,20 @@ won't be able to type anything, though.
 
 The script sources `/media/fat/Scripts/.config/romweasel/settings.sh` for user
 configurable settings, or if the file doesn't exist, creates it.
+
+Some game repositories on archive.org have been recently locked, meaning you
+need to login to access them. Since the same problem affects other MiSTer
+scripts as well, ROMweasel has adopted the same solution. Place following
+lines in your `/root/.profile` file:
+
+```
+export IA_USER="login@email"
+export IA_PASS="secret123"
+```
+
+Support for login is preliminary at the moment, and problems caused by failed
+login are not handled properly. If you experience any problems, delete files
+under `/media/fat/Scripts/.config/romweasel` and try again.
 
 ## Features
 
