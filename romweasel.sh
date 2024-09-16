@@ -261,7 +261,9 @@ cleanup () {
 # Login to archive.org and setup a cookie for all downloads, if IA_USER/IA_PASS
 # variables are set.
 ia_login () {
-    if [[ -z $IA_USER ]] && [[ -z $IA_PASS ]]; then return; fi
+    if [[ -z $IA_USER ]] || [[ -z $IA_PASS ]]; then return; fi
+
+    print "Logging in to archive.org..."
 
     unsetopt warnnestedvar
     CURL_OPTS+=(-c cookie.tmp -b cookie.tmp)
