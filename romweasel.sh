@@ -360,7 +360,7 @@ get_rom_gamedir () {
     local match mbegin mend # Set by backreference glob (#b)
 
     # For compressed files, it's always just the core main ROM directory
-    [[ -z ${tag##*.7z} || $CORE -eq "AO486" ]] && { print "$odir" ; return }
+    [[ -z ${tag##*.7z} || $CORE == "AO486" ]] && { print "$odir" ; return }
 
     # Strip prefix subdir and file extension
     tag=${${(Q)tag%.chd}##*/}
