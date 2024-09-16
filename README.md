@@ -16,6 +16,10 @@ MiSTer has now added support for controlling the normal mode entirely with a
 joystick, including tagging multiple games at once and PgUp/PgDn. You still
 won't be able to type anything, though.
 
+On startup, ROMweasel asks if you want to re-download ROM repository metadata.
+This is required, if any of the ROM repositories have been updated or the local
+metadata is corrupted.
+
 ## Configuration
 
 The script sources `/media/fat/Scripts/.config/romweasel/settings.sh` for user
@@ -31,9 +35,8 @@ export IA_USER="login@email"
 export IA_PASS="secret123"
 ```
 
-Support for login is preliminary at the moment, and problems caused by failed
-login are not handled properly. If you experience any problems, delete files
-under `/media/fat/Scripts/.config/romweasel` and try again.
+If you experience problems with downloads, make sure you have the above setup
+and then re-download ROM repository metadata.
 
 ## Features
 

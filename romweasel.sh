@@ -263,33 +263,52 @@ cleanup () {
 ia_login () {
     if [[ -z $IA_USER ]] || [[ -z $IA_PASS ]]; then return; fi
 
-    print "Logging in to archive.org..."
-
     unsetopt warnnestedvar
     CURL_OPTS+=(-c cookie.tmp -b cookie.tmp)
     setopt warnnestedvar
 
-    # Initiate login process (session id and that shazba)
-    $CURL $CURL_OPTS -skLo /dev/null https://archive.org/account/login
-
-    # Send credentials
     local u=$(urlencode "$IA_USER")
     local p=$(urlencode "$IA_PASS")
-    local res=$($CURL $CURL_OPTS -skL -X POST \
-        --data-raw "username=$u&password=$p&remember=true" \
-        https://archive.org/account/login 2>&1)
 
-    # Check if it worked (this is a silly amount of trouble just to get 0/1 exit code.. sigh)
-    $JQ -r 'if .status == "ok" then .status else null | halt_error(1) end' <<< $res >/dev/null 2>&1
+    # Capture login results to a temporary file
+    local tmpf=$(mktemp) ; exec 5>$tmpf
+    {
+        # Initiate login process (session id and that shazba)
+        print "Initializing session.."
+        $CURL $CURL_OPTS -skLo /dev/null https://archive.org/account/login
+        # Send credentials
+        print "Sending credentials.."
+        $CURL $CURL_OPTS -skL -X POST \
+            --data-raw "username=$u&password=$p&remember=true" \
+            https://archive.org/account/login 2>&1 1>&5
+    } | $DIALOG --title $TITLE --progressbox "Logging in to archive.org" 8 78
+    # Cleanup and put login result to $res
+    exec 5>- ; local res=$(<$tmpf) ; rm $tmpf
+
+    # Check if login succeeded (this is a silly amount of trouble just to get 0/1 exit code.. sigh)
+    $JQ -er 'if .status == "ok" then . else null | halt_error(1) end' <<< $res >/dev/null 2>&1
     [[ $? -eq 0 ]] && return
 
     # It didn't
-    print "Error logging in to archive.org. Please check your IA_USER / IA_PASS variables."
+    $DIALOG --title $TITLE \
+        --msgbox "Error logging in to archive.org. Please check IA_USER / IA_PASS variables." 5 78
     cleanup
 }
 
 # Download XML files containing all ROM metadata
 fetch_metadata () {
+    # If any XML files already exist, ask the user if forced re-download is desired.
+    #
+    # A technically more correct method would be always re-downloading only when remote file
+    # has a newer timestamp than the local (which is trivially doable), but this approach is
+    # in practice just as slow as unconditionally re-downloading all of the files.
+    local -a xmls=($(print *.xml(N)))
+    if [[ -n $xmls ]]; then
+        $DIALOG --title $TITLE --defaultno \
+            --yesno "Do you want to re-download ROM repository metadata?" 5 58
+        [[ $? -eq $DIALOG_OK ]] && rm $xmls
+    fi
+
     local -i i
     # Loop through the list of ROM repositories
     (for (( i=1; i<${#SUPPORTED_CORES}; i+=2 )) ; do
