@@ -6,7 +6,7 @@
     "default_options": {},
     "files": {
         "Scripts/romweasel.sh": {
-            "hash": "6d94215d842d47fe42732efab090570445f4bf65",
+            "hash": "f50e5f7f4ef788ec3eb19d53b9d32807",
             "size": 32523,
             "url": "https://raw.githubusercontent.com/Koston-0xDEADBEEF/MiSTer-ROMweasel/main/romweasel.sh"
         }
