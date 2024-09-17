@@ -442,6 +442,7 @@ download_roms () {
         fi
 
         # If the file is compressed, extract it, otherwise just move to destination
+        print "Extracting/moving '$tag' to $dest"
         if [[ -z ${tag##*.7z} ]]; then
             $SZR e "$ofile" -o"$dest" -y
             rm "$ofile"
