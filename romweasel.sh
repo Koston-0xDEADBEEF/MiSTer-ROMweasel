@@ -261,6 +261,8 @@ cleanup () {
 # Login to archive.org and setup a cookie for all downloads, if IA_USER/IA_PASS
 # variables are set.
 ia_login () {
+    # Variables are sourced from ~/.profile by other scripts as well
+    if [[ -f ~/.profile ]]; then source ~/.profile; fi
     if [[ -z $IA_USER ]] || [[ -z $IA_PASS ]]; then return; fi
 
     unsetopt warnnestedvar
