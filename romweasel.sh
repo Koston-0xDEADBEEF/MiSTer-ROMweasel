@@ -182,7 +182,7 @@ set_conf_opts () {
     typeset -gr PSXMISC_GAMEDIR=${PSXMISC_GAMEDIR:-/media/fat/games/PSX}
     # The 0MHz DOS zips have required directory structure builtin (smart!)
     typeset -gr AO486_GAMEDIR=${AO486_GAMEDIR:-/media/fat}
-    typeset -gr CD32_GAMEDIR=${CD32_GAMEDIR:-/media/fat/games/Amiga/CD32}
+    typeset -gr CD32_GAMEDIR=${CD32_GAMEDIR:-/media/fat/games/AmigaCD32}
     typeset -gr GNW_GAMEDIR=${GNW_GAMEDIR:-/media/fat/games/GameNWatch}
     typeset -gr WS_GAMEDIR=${WS_GAMEDIR:-/media/fat/games/WonderSwan}
     typeset -gr WSC_GAMEDIR=${WSC_GAMEDIR:-/media/fat/games/WonderSwanColor}
