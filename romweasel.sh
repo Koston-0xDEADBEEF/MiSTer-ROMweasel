@@ -58,9 +58,9 @@ init_static_globals () {
     )
 
     # The prefix "NAME_" must match the core name in above list
-    typeset -gr NES_URL="https://archive.org/download/nointro.nes"
-    typeset -gr NES_FILES_XML="nointro.nes_files.xml"
-    typeset -gr NES_META_XML="nointro.nes_meta.xml"
+    typeset -gr NES_URL="https://archive.org/download/nointro.nes-headered"
+    typeset -gr NES_FILES_XML="nointro.nes-headered_files.xml"
+    typeset -gr NES_META_XML="nointro.nes-headered_meta.xml"
     typeset -gr SNES_URL="https://archive.org/download/nointro.snes"
     typeset -gr SNES_FILES_XML="nointro.snes_files.xml"
     typeset -gr SNES_META_XML="nointro.snes_meta.xml"
